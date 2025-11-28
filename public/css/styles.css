@@ -19,12 +19,18 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", system-ui,
     sans-serif;
   background: var(--color-bg);
   color: var(--color-text);
+  overflow: hidden; /* 不允許滾動 */
 }
 
 a {
@@ -72,7 +78,7 @@ a {
   display: flex;
   align-items: center;
   background: rgba(255, 255, 255, 0.5);
-  border-radius: 10px;
+  border-radius: 999px;
   padding: 0.2rem 0.4rem;
   border: 1px solid rgba(0, 0, 0, 0.08);
 }
@@ -90,7 +96,16 @@ a {
   border: none;
   background: transparent;
   cursor: pointer;
-  font-size: 0.9rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.us-search-btn img {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .us-nav {
@@ -146,14 +161,18 @@ a {
 .us-main {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 1.5rem 1rem 2rem;
+  padding: 0 1rem;
+  height: calc(100vh - 56px - 40px); /* 大約扣掉 header + footer 高度，可依實際調整 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 /* Hero 區：大樹 + CTA */
 
 .us-hero-landing {
   position: relative;
-  min-height: calc(100vh - 120px);
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -171,98 +190,8 @@ a {
 /* canvas 容器，三維樹會在這裡畫出來 */
 .tree-canvas-container {
   width: 100%;
-  height: 70vh;
-  max-height: 640px;
-}
-
-/* 浮動圖片容器：覆蓋在 3D 樹上方 */
-
-.us-floating-images {
-  position: absolute;
-  inset: 0;
-  pointer-events: none; /* 不擋互動 */
-  z-index: 2;
-}
-
-/* 基本浮動圖片樣式 */
-
-.float-img {
-  position: absolute;
-  width: 80px;
-  opacity: 0.8;
-  border: 1px solid red; /* DEBUG: 之後可刪除 */
-}
-
-/* 三張圖在不同位置 */
-
-.float-img-1 {
-  top: 18%;
-  left: 8%;
-  animation: floatUpDown1 6s ease-in-out infinite;
-}
-
-.float-img-2 {
-  top: 30%;
-  right: 6%;
-  width: 70px;
-  animation: floatUpDown2 7.5s ease-in-out infinite;
-}
-
-.float-img-3 {
-  bottom: 18%;
-  left: 15%;
-  width: 90px;
-  animation: floatUpDown3 8s ease-in-out infinite;
-}
-
-/* 飄動動畫 */
-
-@keyframes floatUpDown1 {
-  0% {
-    transform: translateY(0px) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-10px) rotate(-2deg);
-  }
-  100% {
-    transform: translateY(0px) rotate(0deg);
-  }
-}
-
-@keyframes floatUpDown2 {
-  0% {
-    transform: translateY(0px) rotate(1deg);
-  }
-  50% {
-    transform: translateY(-14px) rotate(-1deg);
-  }
-  100% {
-    transform: translateY(0px) rotate(1deg);
-  }
-}
-
-@keyframes floatUpDown3 {
-  0% {
-    transform: translateY(0px) rotate(-1deg);
-  }
-  50% {
-    transform: translateY(-8px) rotate(2deg);
-  }
-  100% {
-    transform: translateY(0px) rotate(-1deg);
-  }
-}
-
-/* RWD：在非常小的螢幕上縮小或隱藏 */
-
-@media (max-width: 480px) {
-  .float-img {
-    width: 60px;
-  }
-
-  .float-img-3 {
-    display: none;
-  }
+  height: 100%;
+  max-height: none;
 }
 
 /* CTA 按鈕位置 */
@@ -325,7 +254,7 @@ a {
   }
 
   .us-main {
-    padding: 1.2rem 1rem 2rem;
+    padding: 0 1rem;
   }
 
   .us-hero-landing {
@@ -338,13 +267,13 @@ a {
   }
 
   .us-cta-wrap {
-    right: 1.2rem;
-    bottom: 1.5rem;
+    right: 1.4rem;
+    bottom: 1.6rem;
   }
 
   .us-btn-report {
-    padding-left: 1.6rem;
-    padding-right: 1.6rem;
+    padding-left: 1.4rem;
+    padding-right: 1.4rem;
   }
 }
 

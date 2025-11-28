@@ -1,5 +1,6 @@
 import * as THREE from "https://esm.sh/three@0.180.0";
 import { GLTFLoader } from "https://esm.sh/three@0.180.0/examples/jsm/loaders/GLTFLoader.js";
+import { OrbitControls } from "https://esm.sh/three@0.180.0/examples/jsm/controls/OrbitControls.js";
 
 console.log("[UrbanSeed] index.js loaded");
 
@@ -8,6 +9,7 @@ const MODEL_URL = "./assets/models/tree.glb";
 
 let scene, camera, renderer;
 let treeModel = null;
+let controls = null;
 
 function initThree() {
   const container = document.getElementById("treeCanvasContainer");
@@ -20,13 +22,27 @@ function initThree() {
   scene.background = new THREE.Color(0xf3f3f3);
 
   camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-  camera.position.set(0, 1.5, 4);
+  camera.position.set(0, 1.8, 3.2); // 稍微拉近
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(width, height);
   container.innerHTML = "";
   container.appendChild(renderer.domElement);
+
+  // 新增：滑鼠控制
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.enablePan = false;
+  // 限制上下角度，不用看到樹底 / 天空太多
+  controls.minPolarAngle = Math.PI / 2 - 0.4;
+  controls.maxPolarAngle = Math.PI / 2 + 0.4;
+  // 限制縮放距離
+  controls.minDistance = 2.2;
+  controls.maxDistance = 4.5;
+
+  renderer.domElement.style.cursor = "grab";
 
   // 簡單光源
   const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
@@ -36,14 +52,6 @@ function initThree() {
   const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
   dirLight.position.set(2, 4, 2);
   scene.add(dirLight);
-
-  // 測試用立方體：如果看得到它，代表場景正常
-  const testGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-  const testMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
-  const testCube = new THREE.Mesh(testGeo, testMat);
-  testCube.position.set(-1, 0, 0);
-  scene.add(testCube);
-  console.log("[UrbanSeed] test cube added");
 
   // 載入 GLTF 模型
   const loader = new GLTFLoader();
@@ -70,7 +78,7 @@ function initThree() {
 
       // 先用一個保守縮放值，避免模型太大或太小
       const maxDim = Math.max(size.x, size.y, size.z);
-      const scaleFactor = maxDim > 0 ? 2.5 / maxDim : 1.0;
+      const scaleFactor = maxDim > 0 ? 4.5 / maxDim : 1.0;
       treeModel.scale.setScalar(scaleFactor);
 
       // 讓模型大致站在地板上
@@ -108,8 +116,13 @@ function onWindowResize() {
 function animate() {
   requestAnimationFrame(animate);
 
-  if (treeModel) {
-    treeModel.rotation.y += 0.0025; // 緩慢旋轉
+  // 不要自動旋轉了，改成用滑鼠控制
+  // if (treeModel) {
+  //   treeModel.rotation.y += 0.0025; // 緩慢旋轉
+  // }
+
+  if (controls) {
+    controls.update();
   }
 
   if (renderer && scene && camera) {
