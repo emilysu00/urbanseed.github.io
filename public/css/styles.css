@@ -4,7 +4,7 @@
   --color-bg: #f3f3f3;
   --color-surface: #ffffff;
   --color-text: #111111;
-  --color-muted: #555555;
+  --color-muted: #969696;
   --color-primary: #ceff23;
   --color-primary-text: #111111;
   --radius-xl: 2px;
@@ -41,17 +41,31 @@ a {
 /* Header */
 
 .us-header {
-  background: var(--color-primary);
-  padding: 0.4rem 0;
   position: sticky;
   top: 0;
   z-index: 20;
+
+  /* 毛玻璃亮綠底色 */
+  background: rgba(206, 255, 35, 0.82); /* #ceff23 帶一點透明 */
+
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 4px 4px rgba(77, 77, 77, 0.05);
+
+  /* 讓整條 header 有內部 padding */
+  padding: 0.5rem;
+
+  /* 讓 header 上下左右有留白，而不是貼在最上方 */
+  margin: 1.5rem 1.2rem 0;
+
+  /* 依照整體設定使用 2px 圓角 */
+  border-radius: 10px;
 }
 
 .us-header-inner {
-  max-width: 1200px;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 0 2rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -60,7 +74,7 @@ a {
 .us-header-left {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.8rem;
 }
 
 .us-logo {
@@ -77,19 +91,20 @@ a {
 .us-search {
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.5);
-  border-radius: 999px;
-  padding: 0.2rem 0.4rem;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 .us-search-input {
   border: none;
   background: transparent;
-  padding: 0.3rem 0.6rem;
+  padding: 0.3rem 0.4rem;
   font-size: 0.9rem;
   min-width: 220px;
   outline: none;
+  box-shadow: none;
 }
 
 .us-search-btn {
@@ -126,7 +141,7 @@ a {
   left: 0;
   bottom: 0;
   width: 0;
-  height: 2px;
+  height: 1px;
   background: #111;
   transition: width 0.2s ease-out;
 }
@@ -159,10 +174,10 @@ a {
 /* 主體 */
 
 .us-main {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 1rem;
-  height: calc(100vh - 56px - 40px); /* 大約扣掉 header + footer 高度，可依實際調整 */
+  max-width: 100%;
+  margin: 0;
+  padding: 0; /* 拿掉左右 padding，避免畫面左邊有空白 */
+  height: calc(100vh - 90px); /* header 約略變高 + 上下 margin */
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -175,14 +190,16 @@ a {
   flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch; /* 改成 stretch，讓內容撐滿寬度 */
   justify-content: center;
 }
 
 .us-tree-canvas-wrap {
+  flex: 1;
   width: 100%;
-  max-width: 620px;
-  margin: 0 auto;
+  height: 100%;
+  max-width: none; /* 拿掉 620px 之類的限制 */
+  margin: 0;
   position: relative;
   z-index: 1;
 }
@@ -191,7 +208,18 @@ a {
 .tree-canvas-container {
   width: 100%;
   height: 100%;
-  max-height: none;
+  position: relative;
+  z-index: 2; /* 3D 樹在文字樹上面 */
+}
+
+.code-tree-canvas {
+  position: absolute;
+  inset: 0; /* 填滿整個 hero 區 */
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 1; /* 在 3D 樹下面，但在背景上面 */
+  pointer-events: none;
 }
 
 /* CTA 按鈕位置 */
@@ -217,7 +245,8 @@ a {
 }
 
 .us-btn-primary:hover {
-  filter: brightness(0.95);
+  color: var(--color-bg);
+  background: var(--color-primary-text);
 }
 
 .us-btn-report {
@@ -227,13 +256,6 @@ a {
 /* 占位區塊 */
 
 /* Footer */
-
-.us-footer {
-  text-align: center;
-  padding: 1.5rem 0 2rem;
-  font-size: 0.8rem;
-  color: var(--color-muted);
-}
 
 /* RWD：小尺寸時 header & CTA 排版調整 */
 
@@ -254,16 +276,11 @@ a {
   }
 
   .us-main {
-    padding: 0 1rem;
+    padding: 0;
   }
 
   .us-hero-landing {
     min-height: calc(100vh - 140px);
-  }
-
-  .tree-canvas-container {
-    height: 60vh;
-    max-height: 520px;
   }
 
   .us-cta-wrap {
@@ -372,7 +389,7 @@ a {
   background: var(--color-surface);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-soft);
-  overflow: hidden;
+  overflow: auto;
 }
 
 .report-image-wrap {
@@ -464,8 +481,6 @@ select,
 textarea {
   width: 100%;
   padding: 0.6rem 0.7rem;
-  border-radius: 10px;
-  border: 1px solid #ddd;
   font-size: 0.9rem;
   font-family: inherit;
 }
@@ -549,4 +564,50 @@ input[type="file"] {
   .form-section {
     margin-top: 1.5rem;
   }
+}
+
+/* 最底層：亂碼背景 canvas */
+#code-tree-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0; /* 最底層 */
+  pointer-events: none;
+}
+
+/* 中間層：3D 樹的容器 */
+#scene-container {
+  position: relative;
+  z-index: 1;
+}
+
+#scene-container canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: transparent !important;
+  z-index: 1;
+}
+
+/* 最上層：Header（依照你的 class 名稱，如 .site-header） */
+header,
+.site-header {
+  position: fixed;
+  top: 16px;
+  left: 0;
+  right: 0;
+  z-index: 10;
+}
+
+/* 最上層：右下 CTA 按鈕（依照專案 class 調整） */
+.cta-button,
+#cta-button,
+.apply-button {
+  position: fixed;
+  right: 60px;
+  bottom: 60px;
+  z-index: 10;
 }

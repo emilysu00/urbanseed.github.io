@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="./css/styles.css" />
   </head>
   <body>
+    <canvas id="code-tree-canvas"></canvas>
     <header class="us-header">
       <div class="us-header-inner">
         <div class="us-header-left">
@@ -23,7 +24,7 @@
               placeholder="請輸入行道樹編碼進行查詢"
             />
             <button class="us-search-btn" aria-label="搜尋">
-              <img src="./assets/icons/MagnifyingGlass.svg" alt="搜尋圖示" />
+              <img src="./assets/icons/MagnifyingGlass.svg" alt="" />
             </button>
           </div>
         </div>
@@ -36,7 +37,7 @@
         <!-- 行動版 header：中間是 logo，左右是搜尋 / 展開 -->
         <div class="us-header-mobile">
           <button class="us-icon-btn" aria-label="搜尋">
-            <img src="./assets/icons/MagnifyingGlass.svg" alt="搜尋圖示" />
+            <img src="./assets/icons/MagnifyingGlass.svg" alt="" />
           </button>
           <div class="us-logo mobile">
             <img src="./assets/icons/logo-vertical.svg" alt="Urban Seed 標誌" />
@@ -48,63 +49,9 @@
 
     <main class="us-main">
       <section class="us-hero-landing">
-        <div class="us-tree-canvas-wrap">
+        <div class="us-tree-canvas-wrap" id="scene-container">
           <!-- Three.js 會把 3D 場景掛在這個容器裡 -->
           <div id="treeCanvasContainer" class="tree-canvas-container"></div>
-        </div>
-
-        <!-- 浮動的小樹／枝條圖片 -->
-        <div class="us-floating-images">
-          <img
-            src="./assets/images/tree-float-1.jpg"
-            alt=""
-            class="float-img float-img-1"
-          />
-          <img
-            src="./assets/images/tree-float-2.jpg"
-            alt=""
-            class="float-img float-img-2"
-          />
-          <img
-            src="./assets/images/tree-float-3.jpg"
-            alt=""
-            class="float-img float-img-3"
-          />
-          <img
-            src="./assets/images/tree-float-4.jpg"
-            alt=""
-            class="float-img float-img-4"
-          />
-          <img
-            src="./assets/images/tree-float-5.jpg"
-            alt=""
-            class="float-img float-img-5"
-          />
-          <img
-            src="./assets/images/tree-float-6.jpg"
-            alt=""
-            class="float-img float-img-6"
-          />
-          <img
-            src="./assets/images/tree-float-7.jpg"
-            alt=""
-            class="float-img float-img-7"
-          />
-          <img
-            src="./assets/images/tree-float-8.jpg"
-            alt=""
-            class="float-img float-img-8"
-          />
-          <img
-            src="./assets/images/tree-float-9.jpg"
-            alt=""
-            class="float-img float-img-9"
-          />
-          <img
-            src="./assets/images/tree-float-10.jpg"
-            alt=""
-            class="float-img float-img-10"
-          />
         </div>
 
         <div class="us-cta-wrap">
@@ -112,10 +59,6 @@
         </div>
       </section>
     </main>
-
-    <footer class="us-footer">
-      <p>Urban Seed · 行道樹市民回報平台</p>
-    </footer>
 
     <!-- 使用 ES Module，讓 index.js 可以 import three.js -->
     <script type="module" src="./js/index.js"></script>
