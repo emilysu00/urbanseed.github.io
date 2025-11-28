@@ -4,7 +4,7 @@ import { GLTFLoader } from "https://esm.sh/three@0.180.0/examples/jsm/loaders/GL
 console.log("[UrbanSeed] index.js loaded");
 
 // TODO: 如果檔名不是 tree.glb，請改成實際檔名
-const MODEL_URL = "/assets/models/tree.glb";
+const MODEL_URL = "./assets/models/tree.glb";
 
 let scene, camera, renderer;
 let treeModel = null;

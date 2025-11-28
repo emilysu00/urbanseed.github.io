@@ -164,6 +164,8 @@ a {
   width: 100%;
   max-width: 620px;
   margin: 0 auto;
+  position: relative;
+  z-index: 1;
 }
 
 /* canvas 容器，三維樹會在這裡畫出來 */
@@ -179,6 +181,7 @@ a {
   position: absolute;
   inset: 0;
   pointer-events: none; /* 不擋互動 */
+  z-index: 2;
 }
 
 /* 基本浮動圖片樣式 */
@@ -187,6 +190,7 @@ a {
   position: absolute;
   width: 80px;
   opacity: 0.8;
+  border: 1px solid red; /* DEBUG: 之後可刪除 */
 }
 
 /* 三張圖在不同位置 */
@@ -264,9 +268,10 @@ a {
 /* CTA 按鈕位置 */
 
 .us-cta-wrap {
-  position: absolute;
+  position: fixed;
   right: 3rem;
   bottom: 3rem;
+  z-index: 10;
 }
 
 .us-btn-primary {
@@ -333,12 +338,13 @@ a {
   }
 
   .us-cta-wrap {
-    position: static;
-    margin-top: 1.5rem;
+    right: 1.2rem;
+    bottom: 1.5rem;
   }
 
   .us-btn-report {
-    width: 100%;
+    padding-left: 1.6rem;
+    padding-right: 1.6rem;
   }
 }
 
