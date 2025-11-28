@@ -1,0 +1,102 @@
+<!-- public/report.html -->
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <title>回報一棵行道樹 - Urban Seed</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./css/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <div class="logo">Urban Seed</div>
+        <nav class="nav">
+          <a href="/">首頁</a>
+          <a href="/report">我要回報</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="form-section">
+        <h1>回報一棵行道樹</h1>
+        <p>請盡量清楚拍攝整棵樹與問題位置，並填寫以下欄位。</p>
+
+        <form id="reportForm">
+          <!-- 照片 -->
+          <div class="form-group">
+            <label for="photo"
+              >樹木照片（可直接拍照）<span class="required">*</span></label
+            >
+            <input
+              type="file"
+              id="photo"
+              name="photo"
+              accept="image/*"
+              capture="environment"
+              required
+            />
+            <div id="photoPreview" class="photo-preview"></div>
+          </div>
+
+          <!-- 地點 -->
+          <div class="form-group">
+            <label for="location"
+              >地點 / 路段<span class="required">*</span></label
+            >
+            <input
+              type="text"
+              id="location"
+              name="location"
+              placeholder="例：信義路四段靠近市政府站 3 號出口"
+              required
+            />
+          </div>
+
+          <!-- 問題類型 -->
+          <div class="form-group">
+            <label for="problemType"
+              >主要問題類型<span class="required">*</span></label
+            >
+            <select id="problemType" name="problemType" required>
+              <option value="">請選擇</option>
+              <option value="嚴重傾斜">樹幹嚴重傾斜</option>
+              <option value="主幹斷裂或裂縫">主幹斷裂 / 裂縫</option>
+              <option value="大枝枯死">大枝枯死或掛枯枝</option>
+              <option value="根盤隆起或出土">根盤隆起 / 出土</option>
+              <option value="樹冠壓到招牌或電線">樹冠干擾招牌 / 電線</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+
+          <!-- 補充說明 -->
+          <div class="form-group">
+            <label for="description">補充說明（選填）</label>
+            <textarea
+              id="description"
+              name="description"
+              rows="3"
+              placeholder="例如：最近幾天風雨後才發現有明顯傾斜，樹旁邊就是人行道與機車格。"
+            ></textarea>
+          </div>
+
+          <!-- 風險判斷顯示 -->
+          <div class="form-group">
+            <label>系統初步判斷風險：</label>
+            <p id="riskDisplay" class="risk-display">尚未判斷</p>
+          </div>
+
+          <button type="submit" class="btn-primary">送出回報</button>
+          <p id="formMessage" class="form-message"></p>
+        </form>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Urban Seed · 行道樹市民回報平台</p>
+    </footer>
+
+    <script src="./js/report.js"></script>
+  </body>
+</html>

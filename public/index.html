@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Urban Seed - 行道樹回報平台</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./css/styles.css" />
+  </head>
+  <body>
+    <header class="us-header">
+      <div class="us-header-inner">
+        <div class="us-header-left">
+          <div class="us-logo">
+            Urban Seed
+          </div>
+          <div class="us-search">
+            <input
+              type="text"
+              class="us-search-input"
+              placeholder="請輸入行道樹編碼進行查詢"
+            />
+            <button class="us-search-btn" aria-label="搜尋">
+              🔍
+            </button>
+          </div>
+        </div>
+        <nav class="us-nav">
+          <a href="#knowledge">科普知識</a>
+          <a href="#map">行道樹地圖</a>
+          <a href="#about">專案介紹</a>
+        </nav>
+
+        <!-- 行動版 header：中間是 logo，左右是搜尋 / 展開 -->
+        <div class="us-header-mobile">
+          <button class="us-icon-btn" aria-label="搜尋">
+            🔍
+          </button>
+          <div class="us-logo mobile">
+            Urban Seed
+          </div>
+          <button class="us-icon-btn" aria-label="選單">
+            +
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="us-main">
+      <section class="us-hero-landing">
+        <div class="us-tree-canvas-wrap">
+          <!-- Three.js 會把 3D 場景掛在這個容器裡 -->
+          <div id="treeCanvasContainer" class="tree-canvas-container"></div>
+        </div>
+
+        <div class="us-cta-wrap">
+          <a href="/report" class="us-btn-primary us-btn-report">
+            我要申報
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="us-footer">
+      <p>Urban Seed · 行道樹市民回報平台</p>
+    </footer>
+
+    <!-- 使用 ES Module，讓 index.js 可以 import three.js -->
+    <script type="module" src="./js/index.js"></script>
+  </body>
+</html>
