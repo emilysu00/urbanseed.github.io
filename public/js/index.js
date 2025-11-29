@@ -395,9 +395,71 @@ function animate() {
   }
 }
 
+function initMobileHeader() {
+  const body = document.body;
+  const searchToggle = document.querySelector(".us-mobile-search-toggle");
+  const menuToggle = document.querySelector(".us-mobile-menu-toggle");
+  const navOverlay = document.querySelector(".us-mobile-nav-overlay");
+  const navClose = document.querySelector(".us-mobile-nav-close");
+  const navPanel = document.querySelector(".us-mobile-nav-panel");
+  const searchInput = document.querySelector(".us-mobile-search-input");
+  const searchSubmit = document.querySelector(".us-mobile-search-submit");
+
+  // 統一控制搜尋展開 / 收合
+  function toggleSearch() {
+    body.classList.toggle("us-mobile-search-open");
+    if (body.classList.contains("us-mobile-search-open") && searchInput) {
+      searchInput.focus();
+    }
+  }
+
+  // 左邊小搜尋按鈕：負責打開（或關閉）搜尋
+  if (searchToggle) {
+    searchToggle.addEventListener("click", toggleSearch);
+  }
+
+  // 搜尋欄右側的搜尋 icon：展開後也可以關閉（再按一次）
+  if (searchSubmit) {
+    searchSubmit.addEventListener("click", (event) => {
+      event.preventDefault();
+      toggleSearch();
+    });
+  }
+
+  // menu 開關
+  function closeMenu() {
+    body.classList.remove("us-mobile-menu-open");
+  }
+
+  if (menuToggle && navOverlay) {
+    menuToggle.addEventListener("click", () => {
+      body.classList.add("us-mobile-menu-open");
+    });
+
+    // 點選浮層背景（panel 外面）也關閉
+    navOverlay.addEventListener("click", (event) => {
+      if (event.target === navOverlay) {
+        closeMenu();
+      }
+    });
+  }
+
+  if (navClose) {
+    navClose.addEventListener("click", closeMenu);
+  }
+
+  // 點選選單項目後關閉選單
+  if (navPanel) {
+    navPanel.querySelectorAll("a").forEach((link) => {
+      link.addEventListener("click", closeMenu);
+    });
+  }
+}
+
 // （如果未來要在首頁顯示最新回報，可在這裡加 fetchReports）
 
 document.addEventListener("DOMContentLoaded", () => {
   initThree();
   initCodeTreeBackground();
+  initMobileHeader();
 });

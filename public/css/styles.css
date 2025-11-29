@@ -11,6 +11,7 @@
   --radius-lg: 2px;
   --radius-md: 2px;
   --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --tree-photo-height: 190px;
 }
 
 *,
@@ -65,7 +66,7 @@ a {
 .us-header-inner {
   max-width: 1600px;
   margin: 0 auto;
-  padding: 0 2rem;
+  padding: 0 1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -151,24 +152,114 @@ a {
 }
 
 /* 行動版 header 只在小螢幕顯示 */
-
 .us-header-mobile {
   display: none;
-  align-items: center;
-  justify-content: space-between;
   width: 100%;
+  align-items: center;
+  gap: 0.75rem;
 }
 
+/* 行動版搜尋欄（預設隱藏，由 body class 控制顯示） */
+.us-mobile-search-bar {
+  display: none;
+  flex: 1;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.6);
+  height: 48px;
+  border-radius: 10px;
+  padding: 0 0.85rem;
+}
+
+.us-mobile-search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 0.9rem;
+  padding: 0.3rem 0;
+  outline: none;
+}
+
+/* 共用 icon 按鈕樣式 */
 .us-icon-btn {
   border: none;
   background: rgba(255, 255, 255, 0.6);
   border-radius: 10px;
-  width: 32px;
-  height: 32px;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+}
+
+/* 行動版主選單浮層 */
+.us-mobile-nav-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  /* 右邊 padding 改成 2rem，和 .us-header-inner 的 padding 對齊 */
+  padding: 5rem 2.8rem 2rem 2rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
+  z-index: 30;
+}
+
+.us-mobile-nav-panel {
+  position: relative;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 10px;
+  padding: 1rem 1.4rem 2rem;
+  box-shadow: var(--shadow-soft);
+  min-width: 50%;
+  backdrop-filter: blur(10px);
+}
+
+.us-mobile-nav-panel a {
+  display: block;
+  margin-top: 1.6rem;
+  font-size: 1.05rem;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.us-mobile-nav-panel a:first-of-type {
+  margin-top: 0.8rem;
+}
+
+.us-mobile-nav-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  border: none;
+  background: transparent;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+
+/* 狀態 class 控制顯示 */
+/* 狀態 class 控制顯示 */
+body.us-mobile-menu-open .us-mobile-nav-overlay {
+  pointer-events: auto;
+  opacity: 1;
+}
+
+body.us-mobile-search-open .us-mobile-search-bar {
+  display: flex;
+  /* 讓搜尋欄在 grid 中跨越左邊 icon + 中間區域，拉長到 + 前面 */
+  grid-column: 1 / 3;
+  width: 100%;
+}
+
+body.us-mobile-search-open .us-logo.mobile {
+  display: none;
+}
+
+/* 搜尋展開時，左邊原本的小搜尋按鈕隱藏 */
+body.us-mobile-search-open .us-mobile-search-toggle {
+  display: none;
 }
 
 /* 主體 */
@@ -210,6 +301,17 @@ a {
   height: 100%;
   position: relative;
   z-index: 2; /* 3D 樹在文字樹上面 */
+}
+
+.tree-photo {
+  position: absolute;
+  height: var(--tree-photo-height);
+  width: auto;
+  max-width: calc(var(--tree-photo-height) * 1.4);
+  object-fit: contain;
+  display: block;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
 }
 
 .code-tree-canvas {
@@ -272,7 +374,13 @@ a {
   }
 
   .us-header-mobile {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+  }
+
+  .us-header-mobile .us-logo.mobile img {
+    max-height: 48px;
   }
 
   .us-main {

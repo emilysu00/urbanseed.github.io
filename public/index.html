@@ -34,18 +34,58 @@
           <a href="#about">專案介紹</a>
         </nav>
 
-        <!-- 行動版 header：中間是 logo，左右是搜尋 / 展開 -->
+        <!-- 行動版 header：左搜尋、中間 logo、右側 + 選單 -->
         <div class="us-header-mobile">
-          <button class="us-icon-btn" aria-label="搜尋">
+          <button
+            class="us-icon-btn us-mobile-search-toggle"
+            aria-label="搜尋"
+            type="button"
+          >
             <img src="./assets/icons/MagnifyingGlass.svg" alt="" />
           </button>
+
           <div class="us-logo mobile">
             <img src="./assets/icons/logo-vertical.svg" alt="Urban Seed 標誌" />
           </div>
-          <button class="us-icon-btn" aria-label="選單">+</button>
+
+          <!-- 行動版搜尋欄（預設隱藏） -->
+          <div class="us-mobile-search-bar">
+            <input
+              type="text"
+              class="us-mobile-search-input"
+              placeholder="搜尋行道樹、地點……"
+            />
+            <button
+              class="us-search-btn us-mobile-search-submit"
+              type="button"
+              aria-label="送出搜尋"
+            >
+              <img src="./assets/icons/MagnifyingGlass.svg" alt="" />
+            </button>
+          </div>
+
+          <button
+            class="us-icon-btn us-mobile-menu-toggle"
+            aria-label="選單"
+            type="button"
+          >
+            <img src="./assets/icons/Plus.svg" alt="" />
+          </button>
         </div>
       </div>
     </header>
+
+    <!-- 行動版主選單浮層 -->
+    <div class="us-mobile-nav-overlay" aria-hidden="true">
+      <div class="us-mobile-nav-panel">
+        <button class="us-mobile-nav-close" type="button" aria-label="關閉選單">
+          ✕
+        </button>
+        <a href="#map">行道樹地圖</a>
+        <a href="#knowledge">公開資料</a>
+        <a href="#about">專案介紹</a>
+      </div>
+    </div>
 
     <main class="us-main">
       <section class="us-hero-landing">
