@@ -8,39 +8,105 @@
     <link rel="stylesheet" href="./css/styles.css" />
   </head>
   <body>
-    <header class="site-header">
-      <div class="header-inner">
-        <div class="logo">Urban Seed</div>
-        <nav class="nav">
-          <a href="/">首頁</a>
-          <a href="/report">我要回報</a>
+    <header class="us-header">
+      <div class="us-header-inner">
+        <div class="us-header-left">
+          <a href="./index.html">
+            <div class="us-logo">
+              <img
+                src="./assets/icons/logo-horizental.svg"
+                alt="Urban Seed 標誌"
+              />
+            </div>
+          </a>
+          <div class="us-search">
+            <input
+              type="text"
+              class="us-search-input"
+              placeholder="請輸入行道樹編碼進行查詢"
+            />
+            <button class="us-search-btn" aria-label="搜尋">
+              <img src="./assets/icons/MagnifyingGlass.svg" alt="" />
+            </button>
+          </div>
+        </div>
+        <nav class="us-nav">
+          <a href="/#knowledge">科普知識</a>
+          <a href="/#map">行道樹地圖</a>
+          <a href="/#about">專案介紹</a>
         </nav>
+
+        <!-- 行動版 header：左搜尋、中間 logo、右側 + 選單 -->
+        <div class="us-header-mobile">
+          <button
+            class="us-icon-btn us-mobile-search-toggle"
+            aria-label="搜尋"
+            type="button"
+          >
+            <img src="./assets/icons/MagnifyingGlass.svg" alt="" />
+          </button>
+
+          <div class="us-logo mobile">
+            <img src="./assets/icons/logo-vertical.svg" alt="Urban Seed 標誌" />
+          </div>
+
+          <!-- 行動版搜尋欄（預設隱藏） -->
+          <div class="us-mobile-search-bar">
+            <input
+              type="text"
+              class="us-mobile-search-input"
+              placeholder="搜尋行道樹、地點……"
+            />
+            <button
+              class="us-search-btn us-mobile-search-submit"
+              type="button"
+              aria-label="送出搜尋"
+            >
+              <img src="./assets/icons/MagnifyingGlass.svg" alt="" />
+            </button>
+          </div>
+
+          <button
+            class="us-icon-btn us-mobile-menu-toggle"
+            aria-label="選單"
+            type="button"
+          >
+            <img src="./assets/icons/Plus.svg" alt="" />
+          </button>
+        </div>
       </div>
     </header>
 
+    <!-- 行動版主選單浮層 -->
+    <div class="us-mobile-nav-overlay" aria-hidden="true">
+      <div class="us-mobile-nav-panel">
+        <button class="us-mobile-nav-close" type="button" aria-label="關閉選單">
+          ✕
+        </button>
+        <a href="/#map">行道樹地圖</a>
+        <a href="/#knowledge">科普知識</a>
+        <a href="/#about">專案介紹</a>
+      </div>
+    </div>
+
     <main class="main">
       <section class="form-section">
-        <h1>回報一棵行道樹</h1>
+        <h1>回報行道樹問題</h1>
         <p>請盡量清楚拍攝整棵樹與問題位置，並填寫以下欄位。</p>
 
         <form id="reportForm">
-          <!-- 照片 -->
+          <!-- 行道樹編號 -->
           <div class="form-group">
-            <label for="photo"
-              >樹木照片（可直接拍照）<span class="required">*</span></label
-            >
+            <label for="treeId">填入編號（QR CODE 自動填入）</label>
             <input
-              type="file"
-              id="photo"
-              name="photo"
-              accept="image/*"
-              capture="environment"
-              required
+              type="text"
+              id="treeId"
+              name="treeId"
+              placeholder="例：TPH-114-T10-A"
             />
-            <div id="photoPreview" class="photo-preview"></div>
           </div>
 
-          <!-- 地點 -->
+          <!-- 地點 / 路段 -->
           <div class="form-group">
             <label for="location"
               >地點 / 路段<span class="required">*</span></label
@@ -52,6 +118,17 @@
               placeholder="例：信義路四段靠近市政府站 3 號出口"
               required
             />
+          </div>
+
+          <!-- 目標物類型（環境衝突 D4） -->
+          <div class="form-group">
+            <label for="targetType">周邊目標物類型（影響風險評估）</label>
+            <select id="targetType" name="targetType">
+              <option value="">請選擇</option>
+              <option value="A">A 類：醫院 / 捷運站 / 學校 / 重要建築</option>
+              <option value="B">B 類：主要車道 / 人行道</option>
+              <option value="C">C 類：停車格 / 公園綠地等一般空間</option>
+            </select>
           </div>
 
           <!-- 問題類型 -->
@@ -70,6 +147,40 @@
             </select>
           </div>
 
+          <!-- 照片上傳區 -->
+          <div class="form-group">
+            <label for="photo"
+              >樹木照片（可直接拍照）<span class="required">*</span></label
+            >
+            <div class="photo-dropzone" id="photoDropzone">
+              <div class="photo-dropzone-inner">
+                <div class="photo-dropzone-icon">
+                  <img src="./assets/icons/Camera.svg" alt="相機圖示" />
+                </div>
+                <p>點擊拍照或上傳照片</p>
+              </div>
+              <input
+                type="file"
+                id="photo"
+                name="photo"
+                accept="image/*"
+                capture="environment"
+                required
+              />
+            </div>
+            <div id="photoPreview" class="photo-preview"></div>
+          </div>
+
+          <!-- 開啟相機掃描 -->
+          <div class="form-group">
+            <button type="button" id="openScanMode" class="btn-secondary">
+              開啟相機掃描
+            </button>
+            <small class="helper-text">
+              使用掃描框對準樹幹與樹根，拍照後會自動帶入到照片預覽。
+            </small>
+          </div>
+
           <!-- 補充說明 -->
           <div class="form-group">
             <label for="description">補充說明（選填）</label>
@@ -79,6 +190,17 @@
               rows="3"
               placeholder="例如：最近幾天風雨後才發現有明顯傾斜，樹旁邊就是人行道與機車格。"
             ></textarea>
+          </div>
+
+          <!-- 聯絡方式 -->
+          <div class="form-group">
+            <label for="contact">聯絡方式（Line ID 或 Email，選填）</label>
+            <input
+              type="text"
+              id="contact"
+              name="contact"
+              placeholder="例：line：@urbanseed 或 email：tree@example.com"
+            />
           </div>
 
           <!-- 風險判斷顯示 -->
@@ -96,6 +218,27 @@
     <footer class="site-footer">
       <p>Urban Seed · 行道樹市民回報平台</p>
     </footer>
+
+    <div id="cameraScanOverlay" class="camera-scan-overlay" aria-hidden="true">
+      <div class="camera-scan-content">
+        <video id="cameraPreview" autoplay playsinline></video>
+
+        <!-- 掃描框 -->
+        <div class="scan-frame">
+          <div class="scan-line"></div>
+        </div>
+
+        <!-- 底部按鈕列 -->
+        <div class="scan-controls">
+          <button type="button" id="closeScanMode" class="btn-secondary">
+            關閉
+          </button>
+          <button type="button" id="captureScanPhoto" class="btn-primary">
+            拍照
+          </button>
+        </div>
+      </div>
+    </div>
 
     <script src="./js/report.js"></script>
   </body>

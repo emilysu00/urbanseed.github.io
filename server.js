@@ -63,7 +63,16 @@ app.get("/api/reports", (req, res) => {
 // API：新增回報（含圖片上傳）
 app.post("/api/report", upload.single("photo"), (req, res) => {
   try {
-    const { location, problemType, description, riskLevel } = req.body;
+    const {
+      treeId,
+      location,
+      problemType,
+      targetType,
+      description,
+      contact,
+      riskLevel,
+      rootHeavePoint,
+    } = req.body;
     const file = req.file;
 
     if (!file) {
@@ -75,10 +84,14 @@ app.post("/api/report", upload.single("photo"), (req, res) => {
     const newReport = {
       id: Date.now(),
       imageUrl: "/uploads/" + file.filename,
+      treeId: treeId || "",
       location: location || "",
       problemType: problemType || "",
+      targetType: targetType || "",
       description: description || "",
+      contact: contact || "",
       riskLevel: riskLevel || "未判定",
+      rootHeavePoint: rootHeavePoint || "",
       timestamp: Date.now(),
     };
 
