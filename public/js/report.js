@@ -11,7 +11,91 @@ const riskDisplay = document.getElementById("riskDisplay");
 const formMessage = document.getElementById("formMessage");
 const fakeScanStatus = document.getElementById("fakeScanStatus");
 let fakeScanOverlayEl = null;
+let scanP5Instance = null; // p5.js WebGL 掃描動畫實例（若已存在則保留）
+let isFakeScanning = false; // 避免掃描重複啟動
+let scanLabelEl = null; // 顯示英文學名／狀態的小字
 const photoDropzone = document.getElementById("photoDropzone");
+
+// 掃描框會跳到的各個位置（UV 座標 0~1） + 對應文字
+const scanTargets = [
+  { x: 0.20, y: 0.86, label: "Root flare / heaving" },
+  { x: 0.50, y: 0.84, label: "Soil surface check" },
+  { x: 0.80, y: 0.82, label: "Pavement / root conflict" },
+
+  { x: 0.18, y: 0.64, label: "Lower trunk decay" },
+  { x: 0.50, y: 0.60, label: "Mid trunk stability" },
+  { x: 0.82, y: 0.62, label: "Lower crown stress" },
+
+  { x: 0.22, y: 0.42, label: "Branch attachment" },
+  { x: 0.50, y: 0.40, label: "Crown symmetry" },
+  { x: 0.78, y: 0.38, label: "Lateral branch check" },
+
+  { x: 0.26, y: 0.22, label: "Canopy density" },
+  { x: 0.50, y: 0.20, label: "Leader vitality" },
+  { x: 0.74, y: 0.18, label: "Upper crown defects" },
+];
+
+// 根據當前段數產生穩定的「偽隨機」索引，讓順序看起來亂，但每一段內是穩定的
+function segmentRandomIndex(segment, max, salt = 0) {
+  const n = segment + salt * 31.73;
+  const x = Math.sin(n * 12.9898) * 43758.5453;
+  const r = x - Math.floor(x); // 0~1
+  return Math.floor(r * max);
+}
+
+// 依照「上傳的照片實際顯示的位置」換算到 canvas 座標，並再縮一圈
+function getScanBounds(container, canvasW, canvasH, boxW, boxH) {
+  if (!container) {
+    const marginX = canvasW * 0.2;
+    const marginY = canvasH * 0.2;
+    return {
+      xmin: marginX + boxW / 2,
+      xmax: canvasW - marginX - boxW / 2,
+      ymin: marginY + boxH / 2,
+      ymax: canvasH - marginY - boxH / 2,
+    };
+  }
+
+  // container 是 fake-scan-canvas，那它的祖先 photoPreview 裡面有 img
+  const overlay = container.parentElement;
+  const preview = overlay ? overlay.parentElement : null;
+  const imgEl = preview ? preview.querySelector("img") : null;
+
+  if (!imgEl) {
+    const marginX = canvasW * 0.2;
+    const marginY = canvasH * 0.2;
+    return {
+      xmin: marginX + boxW / 2,
+      xmax: canvasW - marginX - boxW / 2,
+      ymin: marginY + boxH / 2,
+      ymax: canvasH - marginY - boxH / 2,
+    };
+  }
+
+  const overlayRect = container.getBoundingClientRect();
+  const imgRect = imgEl.getBoundingClientRect();
+
+  // 把 DOM 座標換成 canvas 座標（canvas 尺寸跟 container 一致）
+  const left =
+    ((imgRect.left - overlayRect.left) / overlayRect.width) * canvasW;
+  const right =
+    ((imgRect.right - overlayRect.left) / overlayRect.width) * canvasW;
+  const top =
+    ((imgRect.top - overlayRect.top) / overlayRect.height) * canvasH;
+  const bottom =
+    ((imgRect.bottom - overlayRect.top) / overlayRect.height) * canvasH;
+
+  // 在照片內再縮一圈（這邊縮比較大一點，效果會很明顯）
+  const shrinkX = (right - left) * 0.12;
+  const shrinkY = (bottom - top) * 0.12;
+
+  const xmin = left + shrinkX + boxW / 2;
+  const xmax = right - shrinkX - boxW / 2;
+  const ymin = top + shrinkY + boxH / 2;
+  const ymax = bottom - shrinkY - boxH / 2;
+
+  return { xmin, xmax, ymin, ymax };
+}
 
 const markRootButton = document.getElementById("markRootButton");
 const rootHeaveInput = document.getElementById("rootHeavePoint");
@@ -93,6 +177,7 @@ function updateRiskDisplay() {
 
 function ensureFakeScanOverlay() {
   if (!photoPreview) return null;
+
   if (fakeScanOverlayEl) {
     if (!photoPreview.contains(fakeScanOverlayEl)) {
       photoPreview.appendChild(fakeScanOverlayEl);
@@ -103,32 +188,223 @@ function ensureFakeScanOverlay() {
   const overlay = document.createElement("div");
   overlay.className = "fake-scan-overlay";
 
+  // 背景格線（保留原本的 CSS 效果）
   const grid = document.createElement("div");
   grid.className = "fake-scan-grid";
 
-  const line = document.createElement("div");
-  line.className = "fake-scan-line";
+  // shader 畫布容器，p5 WebGL 會掛在這裡
+  const canvasContainer = document.createElement("div");
+  canvasContainer.className = "fake-scan-canvas";
 
+  // 中央文字
   const text = document.createElement("div");
   text.className = "fake-scan-text";
   text.textContent = "SCANNING";
 
+  // 小字 label：顯示英文學名 / 狀態
+  const label = document.createElement("div");
+  label.className = "fake-scan-label";
+  label.textContent = "";
+  scanLabelEl = label;
+
   overlay.appendChild(grid);
-  overlay.appendChild(line);
+  overlay.appendChild(canvasContainer);
   overlay.appendChild(text);
+  overlay.appendChild(label);
 
   photoPreview.appendChild(overlay);
   fakeScanOverlayEl = overlay;
+
+  // 初始化 p5 掃描動畫
+  initScanP5(canvasContainer);
+
   return overlay;
+}
+
+function updateScanLabel(idx) {
+  if (!scanLabelEl || !fakeScanOverlayEl || !scanTargets.length) return;
+  const target = scanTargets[idx % scanTargets.length];
+  scanLabelEl.textContent = target.label;
+  scanLabelEl.style.left = `${target.x * 100}%`;
+  scanLabelEl.style.top = `${target.y * 100}%`;
+}
+
+function createScanSketch(container) {
+  return function (p) {
+    let canvasW = 0;
+    let canvasH = 0;
+
+    function resizeCanvasToContainer() {
+      const rect = container.getBoundingClientRect();
+      const w = rect.width || 300;
+      const h = rect.height || 400;
+      if (w === canvasW && h === canvasH) return;
+      canvasW = w;
+      canvasH = h;
+      p.resizeCanvas(canvasW, canvasH);
+    }
+
+    p.setup = function () {
+      const rect = container.getBoundingClientRect();
+      canvasW = rect.width || 300;
+      canvasH = rect.height || 400;
+
+      const c = p.createCanvas(canvasW, canvasH);
+      c.parent(container);
+
+      p.noFill();
+      p.stroke(255);
+      p.strokeWeight(2); // 2px 左右的線寬
+      p.frameRate(30);
+    };
+
+    p.windowResized = function () {
+      resizeCanvasToContainer();
+    };
+
+    p.draw = function () {
+      if (!container || !container.isConnected) {
+        // overlay 被移除就停止
+        p.noLoop();
+        return;
+      }
+
+      resizeCanvasToContainer();
+      p.clear(); // 透明疊在照片上
+
+      const seconds = p.millis() / 1000.0;
+
+      // 每 0.08 秒換一組
+      const intervalSec = 0.08;
+      const seg = Math.floor(seconds / intervalSec);
+
+      const n = scanTargets.length;
+      if (!n) return;
+
+      const newestId = segmentRandomIndex(seg, n, 0);
+      updateScanLabel(newestId);
+
+      // 直立長方形
+      const boxW = canvasW * 0.08;
+      const boxH = canvasH * 0.18;
+
+      p.stroke(255);
+      p.strokeWeight(0.7);
+      p.rectMode(p.CENTER);
+
+      const activeCount = 4;
+      const positions = [];
+
+      // ★ 依照「照片實際位置」算出可掃描範圍（已經有內縮一圈）
+      const { xmin, xmax, ymin, ymax } = getScanBounds(
+        container,
+        canvasW,
+        canvasH,
+        boxW,
+        boxH
+      );
+
+      for (let i = 0; i < activeCount; i++) {
+        const id =
+          i === 0
+            ? newestId
+            : segmentRandomIndex(seg - i, n, i * 17.37);
+
+        const target = scanTargets[id];
+
+        // UV → 大致中心點
+        let cx = target.x * canvasW;
+        let cy = target.y * canvasH;
+
+        // 輕微 jitter（增加亂碼感）
+        const jx =
+          (segmentRandomIndex(seg, 1000, i * 5.21) / 1000 - 0.5) *
+          (canvasW * 0.03);
+        const jy =
+          (segmentRandomIndex(seg, 1000, i * 9.87) / 1000 - 0.5) *
+          (canvasH * 0.03);
+
+        cx += jx;
+        cy += jy;
+
+        // ★ 把位置 clamp 在「照片紅框內縮範圍」裡
+        cx = Math.min(Math.max(cx, xmin), xmax);
+        cy = Math.min(Math.max(cy, ymin), ymax);
+
+        positions.push({ x: cx, y: cy });
+        p.rect(cx, cy, boxW, boxH);
+      }
+
+      // 連線：保持原本亂碼感
+      if (positions.length > 1) {
+        p.stroke(255);
+        p.strokeWeight(0.5);
+
+        const newest = positions[0];
+
+        for (let i = 1; i < positions.length; i++) {
+          const targetPos = positions[i];
+
+          const midX = (newest.x + targetPos.x) / 2;
+          const midY = (newest.y + targetPos.y) / 2;
+
+          const bendX =
+            midX +
+            (segmentRandomIndex(seg, 1000, i * 13.31) / 1000 - 0.5) *
+              (canvasW * 0.02);
+          const bendY =
+            midY +
+            (segmentRandomIndex(seg, 1000, i * 19.79) / 1000 - 0.5) *
+              (canvasH * 0.02);
+
+          p.line(newest.x, newest.y, bendX, bendY);
+          p.line(bendX, bendY, targetPos.x, targetPos.y);
+        }
+      }
+    };
+  };
+}
+
+function initScanP5(container) {
+  if (typeof window.p5 === "undefined") {
+    console.warn("p5.js not loaded; skip scan animation");
+    return;
+  }
+  if (scanP5Instance) return;
+  scanP5Instance = new p5(createScanSketch(container));
+}
+
+function startScanAnimation() {
+  if (!scanP5Instance) return;
+  if (scanP5Instance.loop) {
+    scanP5Instance.loop();
+  }
+}
+
+function stopScanAnimation() {
+  if (!scanP5Instance) return;
+  if (scanP5Instance.noLoop) {
+    scanP5Instance.noLoop();
+  }
 }
 
 function startFakeScan(source) {
   if (!photoPreview || !photoPreview.querySelector("img")) return;
 
+  // 若已在掃描中，就不要再啟動一次
+  if (isFakeScanning) return;
+  isFakeScanning = true;
+
   const overlay = ensureFakeScanOverlay();
-  if (!overlay) return;
+  if (!overlay) {
+    isFakeScanning = false;
+    return;
+  }
 
   overlay.classList.add("active");
+  if (scanLabelEl) {
+    scanLabelEl.style.opacity = "1";
+  }
 
   if (fakeScanTimer) {
     clearTimeout(fakeScanTimer);
@@ -145,12 +421,16 @@ function startFakeScan(source) {
 
   fakeScanTimer = setTimeout(() => {
     overlay.classList.remove("active");
+    if (scanLabelEl) {
+      scanLabelEl.style.opacity = "0";
+    }
     if (fakeScanStatus) {
       fakeScanStatus.textContent =
         source === "camera"
           ? "偵測完成：已擷取街樹影像，請確認問題位置與類型。"
           : "偵測完成：已分析上傳影像，請確認問題類型。";
     }
+    isFakeScanning = false;
   }, 5000);
 }
 
@@ -209,6 +489,7 @@ if (photoInput && photoPreview) {
       if (fakeScanStatus) {
         fakeScanStatus.textContent = "";
       }
+      isFakeScanning = false;
       setPhotoDropzoneVisibility(false);
       return;
     }
@@ -505,6 +786,7 @@ if (reportForm) {
       if (fakeScanStatus) {
         fakeScanStatus.textContent = "";
       }
+      isFakeScanning = false;
 
       setTimeout(() => {
         window.location.href = "/";

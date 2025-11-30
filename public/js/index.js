@@ -219,8 +219,18 @@ function createPhotoPlanes(parent) {
     loader.load(
       url,
       (texture) => {
-        // 建立長方形平面，略長於寬
-        const geo = new THREE.PlaneGeometry(0.7, 1.0);
+        // 依照圖片原始比例建立平面，避免被硬拉扯
+        let geo;
+        const img = texture.image;
+        if (img && img.width && img.height) {
+          const aspect = img.width / img.height; // 寬 / 高
+          const baseHeight = 1.0; // 你可以視覺上再微調高度
+          const width = baseHeight * aspect;
+          geo = new THREE.PlaneGeometry(width, baseHeight);
+        } else {
+          // 如果讀不到尺寸，就退回原本的預設值
+          geo = new THREE.PlaneGeometry(0.7, 1.0);
+        }
         const mat = new THREE.MeshBasicMaterial({
           map: texture,
           transparent: true,
