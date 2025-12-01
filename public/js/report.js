@@ -45,6 +45,7 @@ function segmentRandomIndex(segment, max, salt = 0) {
 
 // 依照「上傳的照片實際顯示的位置」換算到 canvas 座標，並再縮一圈
 function getScanBounds(container, canvasW, canvasH, boxW, boxH) {
+  // 若沒有 container，退回到畫面中間一塊區域
   if (!container) {
     const marginX = canvasW * 0.2;
     const marginY = canvasH * 0.2;
@@ -56,11 +57,12 @@ function getScanBounds(container, canvasW, canvasH, boxW, boxH) {
     };
   }
 
-  // container 是 fake-scan-canvas，那它的祖先 photoPreview 裡面有 img
+  // container 是 .fake-scan-canvas，它的祖先 photoPreview 裡面有 img
   const overlay = container.parentElement;
   const preview = overlay ? overlay.parentElement : null;
   const imgEl = preview ? preview.querySelector("img") : null;
 
+  // 沒有 img 的時候一樣退回到畫面中間一塊區域
   if (!imgEl) {
     const marginX = canvasW * 0.2;
     const marginY = canvasH * 0.2;
@@ -75,24 +77,68 @@ function getScanBounds(container, canvasW, canvasH, boxW, boxH) {
   const overlayRect = container.getBoundingClientRect();
   const imgRect = imgEl.getBoundingClientRect();
 
+  // 若 overlay 尺寸異常，退回預設範圍
+  if (!overlayRect.width || !overlayRect.height) {
+    const marginX = canvasW * 0.2;
+    const marginY = canvasH * 0.2;
+    return {
+      xmin: marginX + boxW / 2,
+      xmax: canvasW - marginX - boxW / 2,
+      ymin: marginY + boxH / 2,
+      ymax: canvasH - marginY - boxH / 2,
+    };
+  }
+
+  // 取「照片與 overlay 的交集」，避免照片部分超出 overlay 邊界的極端情況
+  const imgLeft = Math.max(imgRect.left, overlayRect.left);
+  const imgRight = Math.min(imgRect.right, overlayRect.right);
+  const imgTop = Math.max(imgRect.top, overlayRect.top);
+  const imgBottom = Math.min(imgRect.bottom, overlayRect.bottom);
+
   // 把 DOM 座標換成 canvas 座標（canvas 尺寸跟 container 一致）
   const left =
-    ((imgRect.left - overlayRect.left) / overlayRect.width) * canvasW;
+    ((imgLeft - overlayRect.left) / overlayRect.width) * canvasW;
   const right =
-    ((imgRect.right - overlayRect.left) / overlayRect.width) * canvasW;
+    ((imgRight - overlayRect.left) / overlayRect.width) * canvasW;
   const top =
-    ((imgRect.top - overlayRect.top) / overlayRect.height) * canvasH;
+    ((imgTop - overlayRect.top) / overlayRect.height) * canvasH;
   const bottom =
-    ((imgRect.bottom - overlayRect.top) / overlayRect.height) * canvasH;
+    ((imgBottom - overlayRect.top) / overlayRect.height) * canvasH;
 
-  // 在照片內再縮一圈（這邊縮比較大一點，效果會很明顯）
-  const shrinkX = (right - left) * 0.12;
-  const shrinkY = (bottom - top) * 0.12;
+  // 照片在 canvas 裡的寬高
+  const imgWidthOnCanvas = right - left;
+  const imgHeightOnCanvas = bottom - top;
 
-  const xmin = left + shrinkX + boxW / 2;
-  const xmax = right - shrinkX - boxW / 2;
-  const ymin = top + shrinkY + boxH / 2;
-  const ymax = bottom - shrinkY - boxH / 2;
+  // 先預設縮一圈，避免貼邊
+  let shrinkX = imgWidthOnCanvas * 0.12;
+  let shrinkY = imgHeightOnCanvas * 0.12;
+
+  // 確保「可以放得下至少 1.2 倍掃描匡」——避免超長／超扁照片時匡被擠出邊界
+  const minInnerWidth = boxW * 1.2;
+  const minInnerHeight = boxH * 1.2;
+
+  if (imgWidthOnCanvas - 2 * shrinkX < minInnerWidth) {
+    shrinkX = Math.max(0, (imgWidthOnCanvas - minInnerWidth) / 2);
+  }
+  if (imgHeightOnCanvas - 2 * shrinkY < minInnerHeight) {
+    shrinkY = Math.max(0, (imgHeightOnCanvas - minInnerHeight) / 2);
+  }
+
+  // 最終允許「掃描框中心點」出現的範圍
+  let xmin = left + shrinkX + boxW / 2;
+  let xmax = right - shrinkX - boxW / 2;
+  let ymin = top + shrinkY + boxH / 2;
+  let ymax = bottom - shrinkY - boxH / 2;
+
+  // 再做一次保險：如果因為某些極端比例導致範圍反向，就縮回照片中心
+  if (xmin > xmax) {
+    const cx = (left + right) / 2;
+    xmin = xmax = cx;
+  }
+  if (ymin > ymax) {
+    const cy = (top + bottom) / 2;
+    ymin = ymax = cy;
+  }
 
   return { xmin, xmax, ymin, ymax };
 }
@@ -508,11 +554,10 @@ if (photoInput && photoPreview) {
 
     attachRootMarking(img);
 
-    if (!isMobileViewport) {
-      setTimeout(() => {
-        startFakeScan("upload");
-      }, 300);
-    }
+    // 不論桌機或手機，只要有上傳照片就啟動 fakeScan("upload")
+    setTimeout(() => {
+      startFakeScan("upload");
+    }, 300);
   });
 }
 
@@ -616,6 +661,7 @@ async function captureScanPhoto() {
     (blob) => {
       if (!blob) return;
 
+      // 把相機影像顯示在 photoPreview 裡
       const imgUrl = URL.createObjectURL(blob);
       const img = document.createElement("img");
       img.id = "photoPreviewImg";
@@ -627,7 +673,7 @@ async function captureScanPhoto() {
       if (rootHeaveInput) rootHeaveInput.value = "";
       photoPreview.appendChild(img);
 
-      // 建立一個檔案塞回 input
+      // 建一個檔案塞回 <input type="file">，讓表單送出時還是有檔案
       const file = new File([blob], "scan-photo.jpg", { type: "image/jpeg" });
       const dt = new DataTransfer();
       dt.items.add(file);
@@ -636,8 +682,10 @@ async function captureScanPhoto() {
       attachRootMarking(img);
       setPhotoDropzoneVisibility(true);
 
+      // 關閉相機掃描 overlay，順便停掉 cameraStream
       closeScanMode();
 
+      // 不論桌機 / 手機，開啟相機掃描 → 拍照後都啟動同一套 fakeScan("camera")
       setTimeout(() => {
         startFakeScan("camera");
       }, 300);
