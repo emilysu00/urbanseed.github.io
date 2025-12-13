@@ -5,13 +5,37 @@
   --color-surface: #ffffff;
   --color-text: #111111;
   --color-muted: #969696;
-  --color-primary: #ceff23;
+  --color-primary: #bbff45;
   --color-primary-text: #111111;
   --radius-xl: 2px;
   --radius-lg: 2px;
   --radius-md: 2px;
   --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.08);
   --tree-photo-height: 190px;
+}
+
+#treeCanvasContainer {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+  z-index: 2;
+}
+
+#treeCanvasContainer canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 2;
+}
+
+/* 若有任何 overlay 蓋住 canvas（例如 hero 的遮罩），至少不要擋住畫面 */
+#treeCanvasContainer .overlay,
+#treeCanvasContainer .mask {
+  pointer-events: none;
 }
 
 *,
@@ -22,16 +46,22 @@
 
 html,
 body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
   height: 100%;
+  overflow-x: hidden;
+}
+
+html {
+  background: transparent;
 }
 
 body {
-  margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", system-ui,
     sans-serif;
-  background: var(--color-bg);
+  background: transparent;
   color: var(--color-text);
-  overflow-x: hidden;
   overflow-y: auto;
   padding-top: 90px; /* 預留給固定 header 的空間 */
 }
@@ -50,21 +80,89 @@ a {
   right: 0;
   z-index: 50;
 
-  /* 毛玻璃亮綠底色 */
-  background: rgba(206, 255, 35, 0.82); /* #ceff23 帶一點透明 */
-
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 4px 4px rgba(77, 77, 77, 0.05);
-
-  /* 讓整條 header 有內部 padding */
-  padding: 0.5rem;
-
-  /* 讓 header 上下左右有留白，而不是貼在最上方 */
+  /* 漂浮卡片尺寸 */
+  padding: 0.75rem 0.9rem;
   margin: 1rem 1.2rem 0;
+  border-radius: 14px;
 
-  /* 依照整體設定使用 2px 圓角 */
-  border-radius: 10px;
+  /* 關鍵：讓圓角裁切生效 */
+  position: fixed;
+  overflow: hidden;
+  isolation: isolate;
+
+  /* 建議：強制合成層，避免邊角出現直線 */
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* 用 pseudo-element 承載玻璃層（避免 backdrop-filter 邊角硬切） */
+.us-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+
+  /* 玻璃霧感主體（比現在更霧） */
+  background: rgba(255, 255, 255, var(--us-glass-alpha, 0.08));
+
+  backdrop-filter: blur(var(--us-glass-blur, 18px))
+    saturate(var(--us-glass-sat, 1.08)) contrast(1.04);
+  -webkit-backdrop-filter: blur(var(--us-glass-blur, 18px))
+    saturate(var(--us-glass-sat, 1.08)) contrast(1.04);
+
+  /* 玻璃匡線（回來，但很細） */
+  border: 1px solid rgba(255, 255, 255, 0.28);
+
+  /* 立體層次：外陰影 + 內高光 */
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.18);
+
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 極淡高光層：讓玻璃有透光的“亮面” */
+.us-header::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+
+  /* 高光漸層：玻璃反射感 */
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.32),
+    rgba(255, 255, 255, 0.14) 38%,
+    rgba(255, 255, 255, 0.06) 60%,
+    rgba(255, 255, 255, 0)
+  );
+
+  /* 柔化高光邊緣 */
+  filter: blur(0.6px);
+
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 讓 header 內容在玻璃層上面 */
+.us-header > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* 預設：更透明、更清澈 */
+body {
+  --us-glass-blur: 18px;
+  --us-glass-alpha: 0.08;
+  --us-glass-sat: 1.08;
+}
+
+/* 滾動時：更霧一點、稍厚一點（仍然透明） */
+body.us-scrolling {
+  --us-glass-blur: 26px;
+  --us-glass-alpha: 0.14;
+  --us-glass-sat: 1.12;
 }
 
 .us-header-inner {
@@ -96,18 +194,22 @@ a {
 .us-search {
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 10px;
-  padding: 0.2rem 0.6rem;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 0.35rem 0.8rem;
+
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .us-search-input {
   border: none;
   background: transparent;
-  padding: 0.3rem 0.4rem;
-  font-size: 0.9rem;
-  min-width: 220px;
+  padding: 0.35rem 0.4rem;
+  font-size: 0.95rem;
+  min-width: 340px;
   outline: none;
   box-shadow: none;
 }
@@ -168,10 +270,12 @@ a {
   display: none;
   flex: 1;
   align-items: center;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.12);
   height: 48px;
   border-radius: 10px;
   padding: 0 0.85rem;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .us-mobile-search-input {
@@ -185,15 +289,18 @@ a {
 
 /* 共用 icon 按鈕樣式 */
 .us-icon-btn {
-  border: none;
-  background: rgba(255, 255, 255, 0.6);
-  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
   width: 48px;
   height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 /* 行動版主選單浮層 */
@@ -994,20 +1101,12 @@ textarea {
   }
 }
 
-/* 最底層：亂碼背景 canvas */
-#code-tree-canvas {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0; /* 最底層 */
-  pointer-events: none;
-}
-
 /* 中間層：3D 樹的容器 */
 #scene-container {
-  position: relative;
-  z-index: 1;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
 }
 
 #scene-container canvas {
@@ -1017,7 +1116,7 @@ textarea {
   height: 100%;
   display: block;
   background: transparent !important;
-  z-index: 1;
+  z-index: 0;
 }
 
 /* 最上層：Header（依照你的 class 名稱，如 .site-header） */
