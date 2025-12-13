@@ -24,15 +24,6 @@ const GLASS_PRESET = {
   envMapIntensity: ENV_INTENSITY,
 };
 
-// 彩球（Neon 粒子）設定
-const NEON = {
-  enabled: false, // 預設關閉彩球
-  count: 1800,
-  sizeMin: 2.0,
-  sizeMax: 7.0,
-  opacity: 0.85,
-};
-
 let scene, camera, renderer, controls;
 let treeModel = null;
 const clock = new THREE.Clock();
@@ -149,97 +140,6 @@ function makeGlassMaterial() {
 
   return mat;
 }
-
-// 彩球生成位置（會掛在傳入的 object3D 周圍）
-// function addNeonParticlesTo(object3D) {
-//   if (!NEON.enabled) return null;
-
-//   const box = new THREE.Box3().setFromObject(object3D);
-//   const size = new THREE.Vector3();
-//   const center = new THREE.Vector3();
-//   box.getSize(size);
-//   box.getCenter(center);
-
-//   const spread = Math.max(size.x, size.y, size.z) * 0.55;
-
-//   const geo = new THREE.BufferGeometry();
-//   const positions = new Float32Array(NEON.count * 3);
-//   const colors = new Float32Array(NEON.count * 3);
-//   const sizes = new Float32Array(NEON.count);
-
-//   const neonPalette = [
-//     new THREE.Color("#CEFF23"),
-//     new THREE.Color("#00F5FF"),
-//     new THREE.Color("#FF3DFF"),
-//     new THREE.Color("#7CFF00"),
-//   ];
-
-//   for (let i = 0; i < NEON.count; i++) {
-//     const ix = i * 3;
-
-//     const x = center.x + (Math.random() * 2 - 1) * spread;
-//     const y = center.y + (Math.random() * 2 - 1) * spread * 0.5;
-//     const z = center.z + (Math.random() * 2 - 1) * spread;
-
-//     positions[ix + 0] = x;
-//     positions[ix + 1] = y;
-//     positions[ix + 2] = z;
-
-//     const c = neonPalette[(Math.random() * neonPalette.length) | 0];
-//     colors[ix + 0] = c.r;
-//     colors[ix + 1] = c.g;
-//     colors[ix + 2] = c.b;
-
-//     sizes[i] = NEON.sizeMin + Math.random() * (NEON.sizeMax - NEON.sizeMin);
-//   }
-
-//   geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-//   geo.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
-//   geo.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
-
-//   const mat = new THREE.ShaderMaterial({
-//     transparent: true,
-//     depthWrite: false,
-//     blending: THREE.AdditiveBlending,
-//     uniforms: {
-//       uOpacity: { value: NEON.opacity },
-//       uPixelRatio: { value: Math.min(window.devicePixelRatio, 2.0) },
-//     },
-//     vertexShader: `
-//       attribute float aSize;
-//       attribute vec3 aColor;
-//       varying vec3 vColor;
-
-//       uniform float uPixelRatio;
-
-//       void main() {
-//         vColor = aColor;
-//         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-//         gl_Position = projectionMatrix * mvPosition;
-
-//         float dist = -mvPosition.z;
-//         gl_PointSize = aSize * uPixelRatio * (300.0 / dist);
-//       }
-//     `,
-//     fragmentShader: `
-//       varying vec3 vColor;
-//       uniform float uOpacity;
-
-//       void main() {
-//         vec2 p = gl_PointCoord - vec2(0.5);
-//         float d = length(p);
-//         float alpha = smoothstep(0.5, 0.0, d);
-//         alpha *= uOpacity;
-
-//         gl_FragColor = vec4(vColor, alpha);
-//       }
-//     `,
-//   });
-
-//   const points = new THREE.Points(geo, mat);
-//   points.name = "__NEON_PARTICLES__";
-//   return points;
-// }
 
 function setupCameraAndControls(container) {
   const rect = container.getBoundingClientRect();
@@ -427,6 +327,41 @@ function addFloatingPhotos(treeModel) {
   };
 
   const loader = new THREE.TextureLoader(manager);
+  // === Lazy loading queue for photo textures (方案 A) ===
+  const pending = [];
+
+  function enqueueTextureLoad(mesh, url) {
+    pending.push({ mesh, url });
+  }
+
+  function drainQueue(batchSize = 2) {
+    for (let k = 0; k < batchSize && pending.length; k++) {
+      const { mesh, url } = pending.shift();
+
+      loader.load(url, (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+
+        const img = tex.image;
+        if (img && img.width && img.height) {
+          const aspect = img.height / img.width;
+          mesh.scale.set(planeW, planeW * aspect, 1);
+        } else {
+          mesh.scale.set(planeW, planeH, 1);
+        }
+
+        mesh.material.map = tex;
+        mesh.material.needsUpdate = true;
+      });
+    }
+
+    if (pending.length) {
+      if ("requestIdleCallback" in window) {
+        requestIdleCallback(() => drainQueue(batchSize));
+      } else {
+        setTimeout(() => drainQueue(batchSize), 50);
+      }
+    }
+  }
 
   for (let i = 0; i < photoCount; i++) {
     const url = PHOTO_URLS[i];
@@ -444,21 +379,7 @@ function addFloatingPhotos(treeModel) {
 
     // 先給一個 fallback scale，避免貼圖還沒載完時 mesh=0 看不到
     mesh.scale.set(planeW, planeH, 1);
-
-    loader.load(url, (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace;
-
-      const img = tex.image;
-      if (img && img.width && img.height) {
-        const aspect = img.height / img.width; // 高/寬
-        mesh.scale.set(planeW, planeW * aspect, 1); // 寬固定用 planeW，高用比例算
-      } else {
-        mesh.scale.set(planeW, planeH, 1);
-      }
-
-      mesh.material.map = tex;
-      mesh.material.needsUpdate = true;
-    });
+    enqueueTextureLoad(mesh, url);
 
     // 放射狀角度（帶一點錯開，避免完全平均太像 UI）
     const angle = (i / photoCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.2;
@@ -500,12 +421,12 @@ function addFloatingPhotos(treeModel) {
 
     // ✅ 深度排序保險：讓圖片不容易被樹完全吃掉
     mesh.renderOrder = 10 + i;
-
-    // Debug：若你仍看不到，先把材質染色（不影響貼圖）
-    // material.color.set(0xffffff);
-
     photoGroup.add(mesh);
   }
+
+  // === 啟動 lazy texture loading ===
+  // 先載 4 張，讓畫面快速「完成感」
+  drainQueue(4);
 
   // 把整群加在樹上：會跟樹一起轉
   treeModel.add(photoGroup);
@@ -545,20 +466,3 @@ async function initThree() {
 }
 
 document.addEventListener("DOMContentLoaded", initThree);
-
-// 樹載入失敗時，用隱形方塊作為彩球的參考範圍
-// function spawnNeonFallback() {
-//   if (!scene) return;
-//   const anchor = new THREE.Group();
-//   anchor.name = "__NEON_FALLBACK_ANCHOR__";
-
-//   const bounds = new THREE.Mesh(
-//     new THREE.BoxGeometry(4, 5, 4),
-//     new THREE.MeshBasicMaterial({ visible: false })
-//   );
-//   anchor.add(bounds);
-//   scene.add(anchor);
-
-//   const neon = addNeonParticlesTo(anchor);
-//   if (neon) scene.add(neon);
-// }
