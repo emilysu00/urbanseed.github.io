@@ -80,16 +80,6 @@ function createRenderer(container) {
   container.appendChild(renderer.domElement);
 }
 
-function addLoadingSphere() {
-  const sphere = new THREE.Mesh(
-    new THREE.SphereGeometry(0.35, 24, 16),
-    new THREE.MeshNormalMaterial({ side: THREE.DoubleSide })
-  );
-  sphere.name = "__LOADING_SPHERE__";
-  sphere.position.set(0, 0.5, 0);
-  scene.add(sphere);
-}
-
 function addLights() {
   scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
@@ -202,9 +192,6 @@ function loadTree() {
 
       scene.add(treeModel);
       addFloatingPhotos(treeModel);
-
-      const loadingSphere = scene.getObjectByName("__LOADING_SPHERE__");
-      if (loadingSphere) scene.remove(loadingSphere);
 
       frameToObject(treeModel);
     },
@@ -455,7 +442,6 @@ async function initThree() {
   setupCameraAndControls(container);
 
   addLights();
-  addLoadingSphere();
   await loadHDREnvironment();
   loadTree();
 
