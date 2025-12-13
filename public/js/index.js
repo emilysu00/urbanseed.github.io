@@ -5,10 +5,8 @@ import { RGBELoader } from "https://esm.sh/three@0.180.0/examples/jsm/loaders/RG
 
 console.log("[UrbanSeed] index.js loaded");
 
-const MODEL_URL =
-  "https://github.com/emilysu00/urbanseed.github.io/blob/main/public/assets/models/tree.glb";
-const HDR_URL =
-  "https://github.com/emilysu00/urbanseed.github.io/blob/main/public/assets/hdr/nature.hdr";
+const MODEL_URL = "./assets/models/tree.glb";
+const HDR_URL = "./assets/hdr/nature.hdr";
 
 // 可調參數（你之後只要改這裡就好）
 const RENDER_TRANSPARENT = true; // true = canvas 透明，吃你網站背景
