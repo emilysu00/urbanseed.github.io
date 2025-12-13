@@ -24,6 +24,7 @@ const GLASS_PRESET = {
   envMapIntensity: ENV_INTENSITY,
 };
 
+// 彩球（Neon 粒子）設定
 const NEON = {
   enabled: true,
   count: 1800,
@@ -149,6 +150,7 @@ function makeGlassMaterial() {
   return mat;
 }
 
+// 彩球生成位置（會掛在傳入的 object3D 周圍）
 function addNeonParticlesTo(object3D) {
   if (!NEON.enabled) return null;
 
