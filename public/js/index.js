@@ -151,95 +151,95 @@ function makeGlassMaterial() {
 }
 
 // 彩球生成位置（會掛在傳入的 object3D 周圍）
-function addNeonParticlesTo(object3D) {
-  if (!NEON.enabled) return null;
+// function addNeonParticlesTo(object3D) {
+//   if (!NEON.enabled) return null;
 
-  const box = new THREE.Box3().setFromObject(object3D);
-  const size = new THREE.Vector3();
-  const center = new THREE.Vector3();
-  box.getSize(size);
-  box.getCenter(center);
+//   const box = new THREE.Box3().setFromObject(object3D);
+//   const size = new THREE.Vector3();
+//   const center = new THREE.Vector3();
+//   box.getSize(size);
+//   box.getCenter(center);
 
-  const spread = Math.max(size.x, size.y, size.z) * 0.55;
+//   const spread = Math.max(size.x, size.y, size.z) * 0.55;
 
-  const geo = new THREE.BufferGeometry();
-  const positions = new Float32Array(NEON.count * 3);
-  const colors = new Float32Array(NEON.count * 3);
-  const sizes = new Float32Array(NEON.count);
+//   const geo = new THREE.BufferGeometry();
+//   const positions = new Float32Array(NEON.count * 3);
+//   const colors = new Float32Array(NEON.count * 3);
+//   const sizes = new Float32Array(NEON.count);
 
-  const neonPalette = [
-    new THREE.Color("#CEFF23"),
-    new THREE.Color("#00F5FF"),
-    new THREE.Color("#FF3DFF"),
-    new THREE.Color("#7CFF00"),
-  ];
+//   const neonPalette = [
+//     new THREE.Color("#CEFF23"),
+//     new THREE.Color("#00F5FF"),
+//     new THREE.Color("#FF3DFF"),
+//     new THREE.Color("#7CFF00"),
+//   ];
 
-  for (let i = 0; i < NEON.count; i++) {
-    const ix = i * 3;
+//   for (let i = 0; i < NEON.count; i++) {
+//     const ix = i * 3;
 
-    const x = center.x + (Math.random() * 2 - 1) * spread;
-    const y = center.y + (Math.random() * 2 - 1) * spread * 0.5;
-    const z = center.z + (Math.random() * 2 - 1) * spread;
+//     const x = center.x + (Math.random() * 2 - 1) * spread;
+//     const y = center.y + (Math.random() * 2 - 1) * spread * 0.5;
+//     const z = center.z + (Math.random() * 2 - 1) * spread;
 
-    positions[ix + 0] = x;
-    positions[ix + 1] = y;
-    positions[ix + 2] = z;
+//     positions[ix + 0] = x;
+//     positions[ix + 1] = y;
+//     positions[ix + 2] = z;
 
-    const c = neonPalette[(Math.random() * neonPalette.length) | 0];
-    colors[ix + 0] = c.r;
-    colors[ix + 1] = c.g;
-    colors[ix + 2] = c.b;
+//     const c = neonPalette[(Math.random() * neonPalette.length) | 0];
+//     colors[ix + 0] = c.r;
+//     colors[ix + 1] = c.g;
+//     colors[ix + 2] = c.b;
 
-    sizes[i] = NEON.sizeMin + Math.random() * (NEON.sizeMax - NEON.sizeMin);
-  }
+//     sizes[i] = NEON.sizeMin + Math.random() * (NEON.sizeMax - NEON.sizeMin);
+//   }
 
-  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geo.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
-  geo.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
+//   geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+//   geo.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
+//   geo.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
 
-  const mat = new THREE.ShaderMaterial({
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    uniforms: {
-      uOpacity: { value: NEON.opacity },
-      uPixelRatio: { value: Math.min(window.devicePixelRatio, 2.0) },
-    },
-    vertexShader: `
-      attribute float aSize;
-      attribute vec3 aColor;
-      varying vec3 vColor;
+//   const mat = new THREE.ShaderMaterial({
+//     transparent: true,
+//     depthWrite: false,
+//     blending: THREE.AdditiveBlending,
+//     uniforms: {
+//       uOpacity: { value: NEON.opacity },
+//       uPixelRatio: { value: Math.min(window.devicePixelRatio, 2.0) },
+//     },
+//     vertexShader: `
+//       attribute float aSize;
+//       attribute vec3 aColor;
+//       varying vec3 vColor;
 
-      uniform float uPixelRatio;
+//       uniform float uPixelRatio;
 
-      void main() {
-        vColor = aColor;
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        gl_Position = projectionMatrix * mvPosition;
+//       void main() {
+//         vColor = aColor;
+//         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+//         gl_Position = projectionMatrix * mvPosition;
 
-        float dist = -mvPosition.z;
-        gl_PointSize = aSize * uPixelRatio * (300.0 / dist);
-      }
-    `,
-    fragmentShader: `
-      varying vec3 vColor;
-      uniform float uOpacity;
+//         float dist = -mvPosition.z;
+//         gl_PointSize = aSize * uPixelRatio * (300.0 / dist);
+//       }
+//     `,
+//     fragmentShader: `
+//       varying vec3 vColor;
+//       uniform float uOpacity;
 
-      void main() {
-        vec2 p = gl_PointCoord - vec2(0.5);
-        float d = length(p);
-        float alpha = smoothstep(0.5, 0.0, d);
-        alpha *= uOpacity;
+//       void main() {
+//         vec2 p = gl_PointCoord - vec2(0.5);
+//         float d = length(p);
+//         float alpha = smoothstep(0.5, 0.0, d);
+//         alpha *= uOpacity;
 
-        gl_FragColor = vec4(vColor, alpha);
-      }
-    `,
-  });
+//         gl_FragColor = vec4(vColor, alpha);
+//       }
+//     `,
+//   });
 
-  const points = new THREE.Points(geo, mat);
-  points.name = "__NEON_PARTICLES__";
-  return points;
-}
+//   const points = new THREE.Points(geo, mat);
+//   points.name = "__NEON_PARTICLES__";
+//   return points;
+// }
 
 function setupCameraAndControls(container) {
   const rect = container.getBoundingClientRect();
@@ -547,18 +547,18 @@ async function initThree() {
 document.addEventListener("DOMContentLoaded", initThree);
 
 // 樹載入失敗時，用隱形方塊作為彩球的參考範圍
-function spawnNeonFallback() {
-  if (!scene) return;
-  const anchor = new THREE.Group();
-  anchor.name = "__NEON_FALLBACK_ANCHOR__";
+// function spawnNeonFallback() {
+//   if (!scene) return;
+//   const anchor = new THREE.Group();
+//   anchor.name = "__NEON_FALLBACK_ANCHOR__";
 
-  const bounds = new THREE.Mesh(
-    new THREE.BoxGeometry(4, 5, 4),
-    new THREE.MeshBasicMaterial({ visible: false })
-  );
-  anchor.add(bounds);
-  scene.add(anchor);
+//   const bounds = new THREE.Mesh(
+//     new THREE.BoxGeometry(4, 5, 4),
+//     new THREE.MeshBasicMaterial({ visible: false })
+//   );
+//   anchor.add(bounds);
+//   scene.add(anchor);
 
-  const neon = addNeonParticlesTo(anchor);
-  if (neon) scene.add(neon);
-}
+//   const neon = addNeonParticlesTo(anchor);
+//   if (neon) scene.add(neon);
+// }
