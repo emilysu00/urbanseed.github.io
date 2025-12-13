@@ -312,10 +312,6 @@ function loadTree() {
     (err) => {
       console.error("[UrbanSeed] GLTF load failed:", err);
       console.error("[UrbanSeed] MODEL_URL =", MODEL_URL);
-
-      // 樹載不出來時才啟用彩球當備援
-      NEON.enabled = true;
-      spawnNeonFallback();
     }
   );
 }
