@@ -26,7 +26,7 @@ const GLASS_PRESET = {
 
 // 彩球（Neon 粒子）設定
 const NEON = {
-  enabled: true,
+  enabled: false, // 預設關閉彩球
   count: 1800,
   sizeMin: 2.0,
   sizeMax: 7.0,
@@ -312,6 +312,10 @@ function loadTree() {
     (err) => {
       console.error("[UrbanSeed] GLTF load failed:", err);
       console.error("[UrbanSeed] MODEL_URL =", MODEL_URL);
+
+      // 樹載不出來時才啟用彩球當備援
+      NEON.enabled = true;
+      spawnNeonFallback();
     }
   );
 }
@@ -545,3 +549,20 @@ async function initThree() {
 }
 
 document.addEventListener("DOMContentLoaded", initThree);
+
+// 樹載入失敗時，用隱形方塊作為彩球的參考範圍
+function spawnNeonFallback() {
+  if (!scene) return;
+  const anchor = new THREE.Group();
+  anchor.name = "__NEON_FALLBACK_ANCHOR__";
+
+  const bounds = new THREE.Mesh(
+    new THREE.BoxGeometry(4, 5, 4),
+    new THREE.MeshBasicMaterial({ visible: false })
+  );
+  anchor.add(bounds);
+  scene.add(anchor);
+
+  const neon = addNeonParticlesTo(anchor);
+  if (neon) scene.add(neon);
+}
