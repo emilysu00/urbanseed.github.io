@@ -221,11 +221,9 @@
 
     <div id="cameraScanOverlay" class="camera-scan-overlay" aria-hidden="true">
       <div class="camera-scan-content">
-        <video id="cameraPreview" autoplay playsinline></video>
-
-        <!-- 掃描框 -->
-        <div class="scan-frame">
-          <div class="scan-line"></div>
+        <div class="camera-stage">
+          <video id="cameraPreview" autoplay playsinline></video>
+          <!-- ✅ 新版 machine-vision 掃描 overlay 會由 JS 動態插入在這裡 -->
         </div>
 
         <!-- 底部按鈕列 -->

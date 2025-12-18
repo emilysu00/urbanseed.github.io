@@ -364,9 +364,241 @@ const cameraScanOverlay = document.getElementById("cameraScanOverlay");
 const cameraPreview = document.getElementById("cameraPreview");
 const closeScanModeBtn = document.getElementById("closeScanMode");
 const captureScanPhotoBtn = document.getElementById("captureScanPhoto");
+const cameraStage = document.querySelector(".camera-stage");
 
 let cameraStream = null;
 let fakeScanTimer = null;
+let cameraVisionOverlayEl = null;
+let cameraScanP5Instance = null;
+let cameraLabelEls = [];
+
+function ensureCameraVisionOverlay() {
+  if (!cameraStage) return null;
+  if (cameraVisionOverlayEl && cameraStage.contains(cameraVisionOverlayEl)) {
+    return cameraVisionOverlayEl;
+  }
+
+  // 外層容器
+  const wrap = document.createElement("div");
+  wrap.className = "camera-vision-overlay";
+
+  // 內層：沿用你 report 的 fake-scan-overlay 結構語言
+  const overlay = document.createElement("div");
+  overlay.className = "fake-scan-overlay active frozen";
+  // 相機模式下：我們希望「一直停留」在畫面上（不做 5 秒消失）
+
+  const grid = document.createElement("div");
+  grid.className = "fake-scan-grid";
+
+  const canvasContainer = document.createElement("div");
+  canvasContainer.className = "fake-scan-canvas";
+
+  const labelsWrap = document.createElement("div");
+  labelsWrap.className = "fake-scan-labels";
+
+  cameraLabelEls = [];
+  const MAX = 5;
+  for (let i = 0; i < MAX; i++) {
+    const el = document.createElement("div");
+    el.className = "fake-scan-label";
+    el.style.opacity = "1";
+    labelsWrap.appendChild(el);
+    cameraLabelEls.push(el);
+  }
+
+  overlay.appendChild(grid);
+  overlay.appendChild(canvasContainer);
+  overlay.appendChild(labelsWrap);
+  wrap.appendChild(overlay);
+  cameraStage.appendChild(wrap);
+
+  cameraVisionOverlayEl = wrap;
+
+  // 初始化相機版 p5 掃描
+  initCameraScanP5(canvasContainer);
+
+  return cameraVisionOverlayEl;
+}
+
+function destroyCameraVisionOverlay() {
+  if (cameraScanP5Instance && cameraScanP5Instance.remove) {
+    cameraScanP5Instance.remove();
+  }
+  cameraScanP5Instance = null;
+  cameraLabelEls = [];
+  if (cameraVisionOverlayEl && cameraVisionOverlayEl.remove) {
+    cameraVisionOverlayEl.remove();
+  }
+  cameraVisionOverlayEl = null;
+}
+
+function createCameraScanSketch(container) {
+  // 相機版：直接以全畫面 canvas 為 scan bounds（避免跑出畫面）
+  return function (p) {
+    let canvasW = 0;
+    let canvasH = 0;
+
+    function resize() {
+      const r = container.getBoundingClientRect();
+      const w = r.width || window.innerWidth;
+      const h = r.height || window.innerHeight;
+      if (w === canvasW && h === canvasH) return;
+      canvasW = w;
+      canvasH = h;
+      p.resizeCanvas(canvasW, canvasH);
+    }
+
+    p.setup = function () {
+      const r = container.getBoundingClientRect();
+      canvasW = r.width || window.innerWidth;
+      canvasH = r.height || window.innerHeight;
+      const c = p.createCanvas(canvasW, canvasH);
+      c.parent(container);
+      p.frameRate(30);
+      p.rectMode(p.CENTER);
+    };
+
+    p.windowResized = function () {
+      resize();
+    };
+
+    p.draw = function () {
+      if (!container || !container.isConnected) {
+        p.noLoop();
+        return;
+      }
+      resize();
+      p.clear();
+
+      const seconds = p.millis() / 1000;
+      const intervalSec = 0.08;
+      const seg = Math.floor(seconds / intervalSec);
+
+      const targets =
+        typeof scanTargetsDynamic !== "undefined" &&
+        scanTargetsDynamic?.length
+          ? scanTargetsDynamic
+          : typeof scanTargetsStatic !== "undefined" &&
+            scanTargetsStatic?.length
+            ? scanTargetsStatic
+            : typeof scanTargets !== "undefined"
+              ? scanTargets
+              : [];
+
+      const n = targets.length || 1;
+      const newestId = segmentRandomIndex(seg, n, 0);
+
+      const boxW = canvasW * 0.12; // 相機全螢幕：框略大一點更有存在感
+      const boxH = canvasH * 0.22;
+
+      const minX = boxW / 2;
+      const maxX = canvasW - boxW / 2;
+      const minY = boxH / 2;
+      const maxY = canvasH - boxH / 2;
+
+      const activeCount = 5;
+      const positions = [];
+      const metas = [];
+
+      // 最新框
+      const t0 = targets[newestId % n] || {
+        x: 0.5,
+        y: 0.5,
+        label: "Feature hypothesis",
+      };
+      let cx = t0.x * canvasW;
+      let cy = t0.y * canvasH;
+      // 微抖（相機模式）
+      cx +=
+        (segmentRandomIndex(seg, 1000, 1.23) / 1000 - 0.5) *
+        (canvasW * 0.02);
+      cy +=
+        (segmentRandomIndex(seg, 1000, 4.56) / 1000 - 0.5) *
+        (canvasH * 0.02);
+      cx = Math.min(Math.max(cx, minX), maxX);
+      cy = Math.min(Math.max(cy, minY), maxY);
+      positions.push({ x: cx, y: cy });
+      metas.push({ text: t0.label || "Feature hypothesis", x: cx, y: cy });
+
+      // 次框
+      for (let i = 1; i < activeCount; i++) {
+        const id = segmentRandomIndex(seg - i * 2, n, i * 17.37);
+        const t = targets[id % n] || { x: 0.5, y: 0.5, label: `Feature ${i}` };
+        let px = t.x * canvasW;
+        let py = t.y * canvasH;
+        px +=
+          (segmentRandomIndex(seg, 1000, i * 3.7) / 1000 - 0.5) *
+          (canvasW * 0.015);
+        py +=
+          (segmentRandomIndex(seg, 1000, i * 7.9) / 1000 - 0.5) *
+          (canvasH * 0.015);
+        px = Math.min(Math.max(px, minX), maxX);
+        py = Math.min(Math.max(py, minY), maxY);
+        positions.push({ x: px, y: py });
+        metas.push({ text: t.label || `Feature ${i}`, x: px, y: py });
+      }
+
+      // 綠色疊圖（等大、直角）
+      p.push();
+      try {
+        p.blendMode(p.SCREEN);
+      } catch (e) {}
+      p.noStroke();
+      p.fill(180, 255, 43, 110);
+      for (const pos of positions) p.rect(pos.x, pos.y, boxW, boxH);
+      p.pop();
+
+      // 白框
+      p.noFill();
+      p.stroke(255);
+      p.strokeWeight(0.8);
+      for (const pos of positions) p.rect(pos.x, pos.y, boxW, boxH);
+
+      // 連線（折線）
+      if (positions.length > 1) {
+        p.strokeWeight(0.5);
+        const newest = positions[0];
+        for (let i = 1; i < positions.length; i++) {
+          const tp = positions[i];
+          const midX = (newest.x + tp.x) / 2;
+          const midY = (newest.y + tp.y) / 2;
+          const bendX =
+            midX +
+            (segmentRandomIndex(seg, 1000, i * 13.31) / 1000 - 0.5) *
+              (canvasW * 0.02);
+          const bendY =
+            midY +
+            (segmentRandomIndex(seg, 1000, i * 19.79) / 1000 - 0.5) *
+              (canvasH * 0.02);
+          p.line(newest.x, newest.y, bendX, bendY);
+          p.line(bendX, bendY, tp.x, tp.y);
+        }
+      }
+
+      // DOM 小字同步
+      if (cameraLabelEls?.length) {
+        for (let i = 0; i < cameraLabelEls.length; i++) {
+          const el = cameraLabelEls[i];
+          const m = metas[i];
+          if (!m) {
+            el.style.opacity = "0";
+            continue;
+          }
+          el.style.opacity = "1";
+          el.textContent = m.text;
+          el.style.left = `${(m.x / canvasW) * 100}%`;
+          el.style.top = `${(m.y / canvasH) * 100}%`;
+        }
+      }
+    };
+  };
+}
+
+function initCameraScanP5(container) {
+  if (typeof window.p5 === "undefined") return;
+  if (cameraScanP5Instance) return;
+  cameraScanP5Instance = new p5(createCameraScanSketch(container));
+}
 
 const isMobileViewport = window.matchMedia("(max-width: 768px)").matches;
 
@@ -1033,6 +1265,9 @@ async function openScanMode() {
     cameraScanOverlay.classList.add("visible");
     cameraScanOverlay.setAttribute("aria-hidden", "false");
     document.body.classList.add("no-scroll");
+
+    // ✅ 顯示相機版 machine-vision overlay（與 report 同語言）
+    ensureCameraVisionOverlay();
   } catch (err) {
     console.error("openScanMode error", err);
     alert("無法開啟相機，請確認瀏覽器權限或改用一般上傳。");
@@ -1052,6 +1287,9 @@ function closeScanMode() {
   cameraScanOverlay.classList.remove("visible");
   cameraScanOverlay.setAttribute("aria-hidden", "true");
   document.body.classList.remove("no-scroll");
+
+  // ✅ 關閉時移除相機 overlay，避免殘留
+  destroyCameraVisionOverlay();
 }
 
 if (openScanModeBtn) {
