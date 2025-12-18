@@ -14,26 +14,241 @@ let fakeScanOverlayEl = null;
 let scanP5Instance = null; // p5.js WebGL 掃描動畫實例（若已存在則保留）
 let isFakeScanning = false; // 避免掃描重複啟動
 let scanLabelEl = null; // 顯示英文學名／狀態的小字
+let scanLabelEls = []; // 多個小字（每個框一個）
+let scanLabelsWrapEl = null; // labels 容器
 const photoDropzone = document.getElementById("photoDropzone");
 
+function getPhotoStage() {
+  if (!photoPreview) return null;
+  return photoPreview.querySelector(".photo-stage");
+}
+
+function mountPhotoToStage(imgEl) {
+  if (!photoPreview || !imgEl) return null;
+  photoPreview.innerHTML = "";
+  const stage = document.createElement("div");
+  stage.className = "photo-stage";
+  stage.appendChild(imgEl);
+  photoPreview.appendChild(stage);
+  return stage;
+}
+
+function showSubmitModalAndGoHome() {
+  const old = document.getElementById("usSubmitModal");
+  if (old) old.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "usSubmitModal";
+  modal.className = "us-modal";
+  modal.innerHTML = `
+    <div class="us-modal-backdrop"></div>
+    <div class="us-modal-panel" role="dialog" aria-modal="true">
+      <h3 class="us-modal-title">已收到你的回報 ✅</h3>
+      <p class="us-modal-desc">我們已建立一筆回報紀錄（prototype），接下來將帶你回到首頁。</p>
+      <div class="us-modal-actions">
+        <button type="button" class="btn-primary" id="usGoHomeBtn">回首頁</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const go = () => {
+    window.location.href = "./index.html";
+  };
+  modal.querySelector("#usGoHomeBtn")?.addEventListener("click", go);
+  modal.querySelector(".us-modal-backdrop")?.addEventListener("click", go);
+
+  setTimeout(go, 1200);
+}
+
 // 掃描框會跳到的各個位置（UV 座標 0~1） + 對應文字
-const scanTargets = [
-  { x: 0.20, y: 0.86, label: "Root flare / heaving" },
-  { x: 0.50, y: 0.84, label: "Soil surface check" },
-  { x: 0.80, y: 0.82, label: "Pavement / root conflict" },
+// NOTE: 靜態備援 targets（當照片還沒載入 / 偵測失敗時用）
+const scanTargetsStatic = [
+  { x: 0.2, y: 0.86, label: "Root flare / heaving" },
+  { x: 0.5, y: 0.84, label: "Soil surface check" },
+  { x: 0.8, y: 0.82, label: "Pavement / root conflict" },
 
   { x: 0.18, y: 0.64, label: "Lower trunk decay" },
-  { x: 0.50, y: 0.60, label: "Mid trunk stability" },
+  { x: 0.5, y: 0.6, label: "Mid trunk stability" },
   { x: 0.82, y: 0.62, label: "Lower crown stress" },
 
   { x: 0.22, y: 0.42, label: "Branch attachment" },
-  { x: 0.50, y: 0.40, label: "Crown symmetry" },
+  { x: 0.5, y: 0.4, label: "Crown symmetry" },
   { x: 0.78, y: 0.38, label: "Lateral branch check" },
 
   { x: 0.26, y: 0.22, label: "Canopy density" },
-  { x: 0.50, y: 0.20, label: "Leader vitality" },
+  { x: 0.5, y: 0.2, label: "Leader vitality" },
   { x: 0.74, y: 0.18, label: "Upper crown defects" },
 ];
+
+// 由「照片本身」分析出來的 targets（會覆蓋 static）
+let scanTargetsDynamic = [];
+
+// label 池：用來給動態偵測點分配看起來像真的 metadata
+const scanLabelPool = [
+  "Bark texture / edge density",
+  "Chlorophyll cluster (approx.)",
+  "Trunk axis hypothesis",
+  "Canopy gradient check",
+  "Root flare boundary",
+  "Soil/green segmentation",
+  "Branch junction candidate",
+  "Occlusion boundary",
+  "Surface roughness proxy",
+  "Color variance anomaly",
+  "Vertical structure cue",
+  "Shadow boundary",
+  "Background separation",
+  "Lichen / discoloration",
+  "Crown density proxy",
+  "Stress signature (weak)",
+];
+
+function clamp01(v) {
+  return Math.max(0, Math.min(1, v));
+}
+
+// --- 超輕量「假 machine vision」：用縮圖做顏色（綠/棕）+ 邊緣強度估計，挑出高分區塊當 targets ---
+function buildScanTargetsFromImage(imgEl, opts = {}) {
+  if (!imgEl) return [];
+
+  const W = opts.w || 96;
+  const H = opts.h || 96;
+  const grid = opts.grid || 12; // 12x12 cells
+  const pick = opts.pick || 16; // 選幾個點
+
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return [];
+
+  // drawImage 會依比例塞進去（粗略即可）
+  ctx.drawImage(imgEl, 0, 0, W, H);
+  const img = ctx.getImageData(0, 0, W, H);
+  const d = img.data;
+
+  // 先做灰階與簡易「edge」（用相鄰差值近似，不做完整 sobel 以省成本）
+  const gray = new Float32Array(W * H);
+  const edge = new Float32Array(W * H);
+  const green = new Float32Array(W * H);
+  const trunk = new Float32Array(W * H); // 粗略抓樹幹（偏棕/灰且飽和度不高）
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      const r = d[i] / 255;
+      const g = d[i + 1] / 255;
+      const b = d[i + 2] / 255;
+
+      // 灰階
+      const gr = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      gray[y * W + x] = gr;
+
+      // 綠色程度（簡單：g 相對於 r,b 的優勢）
+      const gScore = clamp01((g - Math.max(r, b)) * 1.8 + 0.15);
+      green[y * W + x] = gScore;
+
+      // 樹幹程度（簡單：r、g、b 接近 + 飽和度低 + 亮度中低）
+      const mx = Math.max(r, g, b);
+      const mn = Math.min(r, g, b);
+      const sat = mx - mn;
+      const trunkScore =
+        clamp01((0.55 - gr) * 0.9 + 0.25) * clamp01((0.18 - sat) * 3.2 + 0.1);
+      trunk[y * W + x] = trunkScore;
+    }
+  }
+
+  // edge：用右/下鄰近像素差（近似梯度）
+  for (let y = 0; y < H - 1; y++) {
+    for (let x = 0; x < W - 1; x++) {
+      const idx = y * W + x;
+      const dx = Math.abs(gray[idx] - gray[idx + 1]);
+      const dy = Math.abs(gray[idx] - gray[idx + W]);
+      edge[idx] = clamp01((dx + dy) * 2.2);
+    }
+  }
+
+  // 聚合到 grid cells
+  const cell = [];
+  const cellSizeX = W / grid;
+  const cellSizeY = H / grid;
+  for (let gy = 0; gy < grid; gy++) {
+    for (let gx = 0; gx < grid; gx++) {
+      let sumG = 0;
+      let sumT = 0;
+      let sumE = 0;
+      let cnt = 0;
+      const x0 = Math.floor(gx * cellSizeX);
+      const x1 = Math.floor((gx + 1) * cellSizeX);
+      const y0 = Math.floor(gy * cellSizeY);
+      const y1 = Math.floor((gy + 1) * cellSizeY);
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const idx = y * W + x;
+          sumG += green[idx];
+          sumT += trunk[idx];
+          sumE += edge[idx];
+          cnt++;
+        }
+      }
+      const gAvg = cnt ? sumG / cnt : 0;
+      const tAvg = cnt ? sumT / cnt : 0;
+      const eAvg = cnt ? sumE / cnt : 0;
+
+      // 分數：綠/樹幹 + 邊緣，讓它更像「找物體輪廓」
+      const score = gAvg * 0.55 + tAvg * 0.55 + eAvg * 0.65;
+
+      cell.push({
+        gx,
+        gy,
+        score,
+        // cell 中心點（UV）
+        x: (gx + 0.5) / grid,
+        y: (gy + 0.5) / grid,
+      });
+    }
+  }
+
+  // 取 top cells
+  cell.sort((a, b) => b.score - a.score);
+
+  // 簡單 non-maximum suppression：避免點全部擠在一起
+  const chosen = [];
+  const minDist = 1.6 / grid; // UV 距離（越大越分散）
+  for (let i = 0; i < cell.length && chosen.length < pick; i++) {
+    const cand = cell[i];
+    if (cand.score < 0.14) break; // 太低就不要了
+    let ok = true;
+    for (let j = 0; j < chosen.length; j++) {
+      const dx = cand.x - chosen[j].x;
+      const dy = cand.y - chosen[j].y;
+      if (dx * dx + dy * dy < minDist * minDist) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) chosen.push(cand);
+  }
+
+  // 讓 targets 更偏「樹幹/垂直」：如果圖片中間分數不差，塞 1~2 個中線點
+  const midX = 0.5;
+  const midBoost = chosen.some((p) => Math.abs(p.x - midX) < 0.12);
+  if (!midBoost) {
+    // 找靠中線但分數高的
+    const midCand = cell.filter((p) => Math.abs(p.x - midX) < 0.12).slice(0, 2);
+    midCand.forEach((p) => chosen.push(p));
+  }
+
+  const out = chosen.slice(0, pick).map((p, k) => ({
+    x: clamp01(p.x),
+    y: clamp01(p.y),
+    label: scanLabelPool[k % scanLabelPool.length],
+    score: p.score,
+  }));
+
+  return out;
+}
 
 // 根據當前段數產生穩定的「偽隨機」索引，讓順序看起來亂，但每一段內是穩定的
 function segmentRandomIndex(segment, max, salt = 0) {
@@ -96,14 +311,10 @@ function getScanBounds(container, canvasW, canvasH, boxW, boxH) {
   const imgBottom = Math.min(imgRect.bottom, overlayRect.bottom);
 
   // 把 DOM 座標換成 canvas 座標（canvas 尺寸跟 container 一致）
-  const left =
-    ((imgLeft - overlayRect.left) / overlayRect.width) * canvasW;
-  const right =
-    ((imgRight - overlayRect.left) / overlayRect.width) * canvasW;
-  const top =
-    ((imgTop - overlayRect.top) / overlayRect.height) * canvasH;
-  const bottom =
-    ((imgBottom - overlayRect.top) / overlayRect.height) * canvasH;
+  const left = ((imgLeft - overlayRect.left) / overlayRect.width) * canvasW;
+  const right = ((imgRight - overlayRect.left) / overlayRect.width) * canvasW;
+  const top = ((imgTop - overlayRect.top) / overlayRect.height) * canvasH;
+  const bottom = ((imgBottom - overlayRect.top) / overlayRect.height) * canvasH;
 
   // 照片在 canvas 裡的寬高
   const imgWidthOnCanvas = right - left;
@@ -224,9 +435,12 @@ function updateRiskDisplay() {
 function ensureFakeScanOverlay() {
   if (!photoPreview) return null;
 
+  const stage = getPhotoStage();
+  if (!stage) return null; // ✅ 沒有圖片就不建立 overlay
+
   if (fakeScanOverlayEl) {
-    if (!photoPreview.contains(fakeScanOverlayEl)) {
-      photoPreview.appendChild(fakeScanOverlayEl);
+    if (!stage.contains(fakeScanOverlayEl)) {
+      stage.appendChild(fakeScanOverlayEl);
     }
     return fakeScanOverlayEl;
   }
@@ -248,17 +462,34 @@ function ensureFakeScanOverlay() {
   text.textContent = "SCANNING";
 
   // 小字 label：顯示英文學名 / 狀態
+  // ✅ 多個小字：每個框一個（更像 machine vision debug snapshot）
+  const labelsWrap = document.createElement("div");
+  labelsWrap.className = "fake-scan-labels";
+  scanLabelsWrapEl = labelsWrap;
+
+  // 保留舊的單一 label 參考（相容），但實際用多 label
   const label = document.createElement("div");
   label.className = "fake-scan-label";
   label.textContent = "";
   scanLabelEl = label;
 
+  scanLabelEls = [];
+  const MAX_LABELS = 5; // 對齊目前 activeCount
+  for (let i = 0; i < MAX_LABELS; i++) {
+    const el = document.createElement("div");
+    el.className = "fake-scan-label";
+    el.textContent = "";
+    labelsWrap.appendChild(el);
+    scanLabelEls.push(el);
+  }
+
   overlay.appendChild(grid);
   overlay.appendChild(canvasContainer);
   overlay.appendChild(text);
-  overlay.appendChild(label);
+  overlay.appendChild(labelsWrap);
 
-  photoPreview.appendChild(overlay);
+  // ✅ overlay 只貼在圖片 stage 上（避免跑到白邊）
+  stage.appendChild(overlay);
   fakeScanOverlayEl = overlay;
 
   // 初始化 p5 掃描動畫
@@ -268,8 +499,13 @@ function ensureFakeScanOverlay() {
 }
 
 function updateScanLabel(idx) {
-  if (!scanLabelEl || !fakeScanOverlayEl || !scanTargets.length) return;
-  const target = scanTargets[idx % scanTargets.length];
+  // 兼容：保留舊 API（但主要用多 label，在 drawOverlay 裡更新）
+  const targets =
+    scanTargetsDynamic && scanTargetsDynamic.length
+      ? scanTargetsDynamic
+      : scanTargetsStatic;
+  if (!scanLabelEl || !fakeScanOverlayEl || !targets.length) return;
+  const target = targets[idx % targets.length];
   scanLabelEl.textContent = target.label;
   scanLabelEl.style.left = `${target.x * 100}%`;
   scanLabelEl.style.top = `${target.y * 100}%`;
@@ -279,6 +515,18 @@ function createScanSketch(container) {
   return function (p) {
     let canvasW = 0;
     let canvasH = 0;
+    let frozen = false;
+
+    // 行為模型（search -> align -> lock）
+    let cur = { x: 0.5, y: 0.5 }; // 目前中心（UV）
+    let goal = { x: 0.5, y: 0.5 }; // 目標中心（UV）
+    let lockStrength = 0; // 0~1，越高抖越小、越黏
+
+    // 畫面殘留（最後 freeze 的結果）
+    let frozenFrame = null; // { positions:[], labelIdx:number, seg:number }
+    let lastPositions = [];
+    let lastMetas = []; // [{text, x, y}]
+    let lastBounds = null; // {xmin,xmax,ymin,ymax} for clamping labels
 
     function resizeCanvasToContainer() {
       const rect = container.getBoundingClientRect();
@@ -302,6 +550,22 @@ function createScanSketch(container) {
       p.stroke(255);
       p.strokeWeight(2); // 2px 左右的線寬
       p.frameRate(30);
+
+      // 對外暴露控制：freeze/resume/updateTargets
+      p.__us = {
+        freeze() {
+          frozen = true;
+          frozenFrame = {
+            positions: lastPositions ? [...lastPositions] : [],
+            metas: lastMetas ? [...lastMetas] : [],
+          };
+        },
+        resume() {
+          frozen = false;
+          frozenFrame = null;
+          lockStrength = 0;
+        },
+      };
     };
 
     p.windowResized = function () {
@@ -318,13 +582,28 @@ function createScanSketch(container) {
       resizeCanvasToContainer();
       p.clear(); // 透明疊在照片上
 
+      // frozen：停在最後一幀（保留框線/連線/小字位置）
+      if (frozen && frozenFrame) {
+        // ⛔ freeze 後：只畫 frozenFrame，完全不更新任何狀態
+        drawOverlay(
+          frozenFrame.positions || [],
+          frozenFrame.metas || [],
+          /*strong=*/ true
+        );
+        return;
+      }
+
       const seconds = p.millis() / 1000.0;
 
       // 每 0.08 秒換一組
       const intervalSec = 0.08;
       const seg = Math.floor(seconds / intervalSec);
 
-      const n = scanTargets.length;
+      const targets =
+        scanTargetsDynamic && scanTargetsDynamic.length
+          ? scanTargetsDynamic
+          : scanTargetsStatic;
+      const n = targets.length;
       if (!n) return;
 
       const newestId = segmentRandomIndex(seg, n, 0);
@@ -334,13 +613,6 @@ function createScanSketch(container) {
       const boxW = canvasW * 0.08;
       const boxH = canvasH * 0.18;
 
-      p.stroke(255);
-      p.strokeWeight(0.7);
-      p.rectMode(p.CENTER);
-
-      const activeCount = 4;
-      const positions = [];
-
       // ★ 依照「照片實際位置」算出可掃描範圍（已經有內縮一圈）
       const { xmin, xmax, ymin, ymax } = getScanBounds(
         container,
@@ -349,65 +621,184 @@ function createScanSketch(container) {
         boxW,
         boxH
       );
+      lastBounds = { xmin, xmax, ymin, ymax };
 
-      for (let i = 0; i < activeCount; i++) {
-        const id =
-          i === 0
-            ? newestId
-            : segmentRandomIndex(seg - i, n, i * 17.37);
+      // --- 行為：search -> align（抖）-> lock（抖變小、更黏） ---
+      // 每隔一段，更新目標點；但移動是「平滑靠近」
+      const target = targets[newestId];
+      goal.x = target.x;
+      goal.y = target.y;
 
-        const target = scanTargets[id];
+      // 平滑靠近（越接近越慢）
+      const ease = 0.12;
+      cur.x = cur.x + (goal.x - cur.x) * ease;
+      cur.y = cur.y + (goal.y - cur.y) * ease;
 
-        // UV → 大致中心點
-        let cx = target.x * canvasW;
-        let cy = target.y * canvasH;
+      // 根據距離估計「信心」：越近越像鎖定
+      const dx = goal.x - cur.x;
+      const dy = goal.y - cur.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const conf = clamp01(1.0 - dist * 6.5); // dist 小 -> conf 高
+      lockStrength = lockStrength * 0.86 + conf * 0.14;
 
-        // 輕微 jitter（增加亂碼感）
-        const jx =
-          (segmentRandomIndex(seg, 1000, i * 5.21) / 1000 - 0.5) *
-          (canvasW * 0.03);
-        const jy =
-          (segmentRandomIndex(seg, 1000, i * 9.87) / 1000 - 0.5) *
-          (canvasH * 0.03);
+      // jitter：在 lockStrength 低時較大，且會有微幅「抓不準」感
+      const jitterAmp = (1 - lockStrength) * 0.035; // UV
+      const jitterX =
+        (segmentRandomIndex(seg, 1000, 3.71) / 1000 - 0.5) * jitterAmp;
+      const jitterY =
+        (segmentRandomIndex(seg, 1000, 7.19) / 1000 - 0.5) * jitterAmp;
 
-        cx += jx;
-        cy += jy;
+      // 主框（最新）中心點（canvas px）
+      let cx = (cur.x + jitterX) * canvasW;
+      let cy = (cur.y + jitterY) * canvasH;
+      // ✅ clamp：確保「整個框」都在照片內
+      const minX = xmin + boxW / 2;
+      const maxX = xmax - boxW / 2;
+      const minY = ymin + boxH / 2;
+      const maxY = ymax - boxH / 2;
+      cx = Math.min(Math.max(cx, minX), maxX);
+      cy = Math.min(Math.max(cy, minY), maxY);
 
-        // ★ 把位置 clamp 在「照片紅框內縮範圍」裡
-        cx = Math.min(Math.max(cx, xmin), xmax);
-        cy = Math.min(Math.max(cy, ymin), ymax);
+      // 其餘框：從「同一張圖的其他高分點」抽樣，但也帶少量不確定性
+      const activeCount = 5;
+      const positions = [];
+      const metas = [];
+      positions.push({ x: cx, y: cy });
+      metas.push({
+        text: targets[newestId]?.label || "Feature hypothesis",
+        x: cx,
+        y: cy,
+      });
 
-        positions.push({ x: cx, y: cy });
-        p.rect(cx, cy, boxW, boxH);
+      for (let i = 1; i < activeCount; i++) {
+        const id = segmentRandomIndex(seg - i * 2, n, i * 17.37);
+        const t = targets[id];
+        let px = t.x * canvasW;
+        let py = t.y * canvasH;
+
+        // 次要框 jitter 小一點，但還是有
+        const j2 =
+          (segmentRandomIndex(seg, 1000, i * 9.13) / 1000 - 0.5) *
+          (canvasW * 0.018);
+        const j3 =
+          (segmentRandomIndex(seg, 1000, i * 11.47) / 1000 - 0.5) *
+          (canvasH * 0.018);
+        px += j2;
+        py += j3;
+
+        // ✅ 次框同樣使用「含尺寸」的 clamp
+        px = Math.min(Math.max(px, minX), maxX);
+        py = Math.min(Math.max(py, minY), maxY);
+        positions.push({ x: px, y: py });
+        metas.push({
+          text: t?.label || `Feature ${i}`,
+          x: px,
+          y: py,
+        });
       }
 
-      // 連線：保持原本亂碼感
+      // 只有在「未 freeze」時才更新 last 狀態
+      lastPositions = positions;
+      lastMetas = metas;
+      drawOverlay(positions, metas, /*strong=*/ false, seg, canvasW, canvasH);
+    };
+
+    function drawOverlay(
+      positions,
+      metas = [],
+      strong = false,
+      seg = 0,
+      w = canvasW,
+      h = canvasH
+    ) {
+      if (!positions || !positions.length) return;
+
+      p.stroke(255);
+      p.strokeWeight(strong ? 0.9 : 0.7);
+      p.rectMode(p.CENTER);
+
+      const boxW = w * 0.08;
+      const boxH = h * 0.18;
+
+      // ✅ 先畫「疊圖掃描高亮」
+      // 綠色 screen / add，大小與白色匡完全一致、無圓角
+      p.push();
+      try {
+        p.blendMode(p.SCREEN);
+      } catch (e) {}
+      p.noStroke();
+      // 透明度：掃描中較亮，freeze 稍降但仍清楚
+      const a = strong ? 80 : 110;
+      // Urban Seed 綠色（segmentation mask 感）
+      p.fill(180, 255, 43, a); // #b4ff2b
+      for (let i = 0; i < positions.length; i++) {
+        const pos = positions[i];
+        // ✅ 與白色匡「完全同尺寸、無圓角」
+        p.rect(pos.x, pos.y, boxW, boxH);
+      }
+      p.pop();
+
+      // 框
+      p.noFill();
+      for (let i = 0; i < positions.length; i++) {
+        const pos = positions[i];
+        p.rect(pos.x, pos.y, boxW, boxH);
+      }
+
+      // 連線：從最新框連到其他框，折線略帶不確定
       if (positions.length > 1) {
-        p.stroke(255);
-        p.strokeWeight(0.5);
-
+        p.strokeWeight(strong ? 0.7 : 0.5);
         const newest = positions[0];
-
         for (let i = 1; i < positions.length; i++) {
           const targetPos = positions[i];
-
           const midX = (newest.x + targetPos.x) / 2;
           const midY = (newest.y + targetPos.y) / 2;
-
           const bendX =
             midX +
             (segmentRandomIndex(seg, 1000, i * 13.31) / 1000 - 0.5) *
-              (canvasW * 0.02);
+              (w * (strong ? 0.012 : 0.02));
           const bendY =
             midY +
             (segmentRandomIndex(seg, 1000, i * 19.79) / 1000 - 0.5) *
-              (canvasH * 0.02);
-
+              (h * (strong ? 0.012 : 0.02));
           p.line(newest.x, newest.y, bendX, bendY);
           p.line(bendX, bendY, targetPos.x, targetPos.y);
         }
       }
-    };
+
+      // ✅ 更新 DOM 小字位置：每個框一個，並且 clamp 在照片內
+      syncDomLabels(metas, w, h);
+    }
+
+    function syncDomLabels(metas, w, h) {
+      if (!scanLabelEls || !scanLabelEls.length) return;
+      if (!fakeScanOverlayEl) return;
+
+      const bounds = lastBounds;
+      for (let i = 0; i < scanLabelEls.length; i++) {
+        const el = scanLabelEls[i];
+        const m = metas[i];
+        if (!m) {
+          el.style.opacity = "0";
+          continue;
+        }
+        el.textContent = m.text || "";
+
+        // px -> %（以 overlay 為參考）
+        let x = m.x;
+        let y = m.y;
+
+        // clamp：確保小字不要跑到圖片外（用同一組 xmin/xmax/ymin/ymax）
+        if (bounds) {
+          x = Math.min(Math.max(x, bounds.xmin), bounds.xmax);
+          y = Math.min(Math.max(y, bounds.ymin), bounds.ymax);
+        }
+
+        el.style.left = `${(x / w) * 100}%`;
+        el.style.top = `${(y / h) * 100}%`;
+        el.style.opacity = "1";
+      }
+    }
   };
 }
 
@@ -434,6 +825,24 @@ function stopScanAnimation() {
   }
 }
 
+function setDynamicTargetsFromPreviewImage() {
+  if (!photoPreview) return;
+  const imgEl = photoPreview.querySelector("img");
+  if (!imgEl) return;
+  try {
+    const dyn = buildScanTargetsFromImage(imgEl, {
+      w: 96,
+      h: 96,
+      grid: 12,
+      pick: 16,
+    });
+    scanTargetsDynamic = Array.isArray(dyn) ? dyn : [];
+  } catch (e) {
+    console.warn("buildScanTargetsFromImage failed", e);
+    scanTargetsDynamic = [];
+  }
+}
+
 function startFakeScan(source) {
   if (!photoPreview || !photoPreview.querySelector("img")) return;
 
@@ -447,10 +856,21 @@ function startFakeScan(source) {
     return;
   }
 
+  // 每次掃描開始：重新根據照片做 targets（顏色/邊緣）
+  setDynamicTargetsFromPreviewImage();
+
   overlay.classList.add("active");
-  if (scanLabelEl) {
-    scanLabelEl.style.opacity = "1";
+  overlay.classList.remove("frozen");
+  // ✅ 開始掃描：多 label 打開
+  if (scanLabelEls && scanLabelEls.length) {
+    scanLabelEls.forEach((el) => (el.style.opacity = "1"));
   }
+
+  // p5 恢復動態
+  if (scanP5Instance && scanP5Instance.__us && scanP5Instance.__us.resume) {
+    scanP5Instance.__us.resume();
+  }
+  startScanAnimation();
 
   if (fakeScanTimer) {
     clearTimeout(fakeScanTimer);
@@ -466,10 +886,18 @@ function startFakeScan(source) {
   }
 
   fakeScanTimer = setTimeout(() => {
-    overlay.classList.remove("active");
-    if (scanLabelEl) {
-      scanLabelEl.style.opacity = "0";
+    // ✅ 不要消失：freeze 成「報告結果」留在畫面上
+    overlay.classList.add("frozen");
+    // ✅ freeze：小字持續顯示
+    if (scanLabelEls && scanLabelEls.length) {
+      scanLabelEls.forEach((el) => (el.style.opacity = "1"));
     }
+
+    if (scanP5Instance && scanP5Instance.__us && scanP5Instance.__us.freeze) {
+      scanP5Instance.__us.freeze();
+    }
+    stopScanAnimation();
+
     if (fakeScanStatus) {
       fakeScanStatus.textContent =
         source === "camera"
@@ -477,7 +905,7 @@ function startFakeScan(source) {
           : "偵測完成：已分析上傳影像，請確認問題類型。";
     }
     isFakeScanning = false;
-  }, 5000);
+  }, 2500);
 }
 
 function setPhotoDropzoneVisibility(hasImage) {
@@ -547,10 +975,9 @@ if (photoInput && photoPreview) {
     img.src = URL.createObjectURL(file);
     img.onload = () => URL.revokeObjectURL(img.src);
 
-    photoPreview.innerHTML = "";
+    mountPhotoToStage(img);
     rootMarkerEl = null;
     if (rootHeaveInput) rootHeaveInput.value = "";
-    photoPreview.appendChild(img);
 
     attachRootMarking(img);
 
@@ -562,12 +989,14 @@ if (photoInput && photoPreview) {
 }
 
 function createOrMoveRootMarker(container, xPercent, yPercent) {
-  if (!container) return;
+  const stage = getPhotoStage();
+  const host = stage || container;
+  if (!host) return;
 
-  if (!rootMarkerEl || !container.contains(rootMarkerEl)) {
+  if (!rootMarkerEl || !host.contains(rootMarkerEl)) {
     rootMarkerEl = document.createElement("div");
     rootMarkerEl.className = "root-marker";
-    container.appendChild(rootMarkerEl);
+    host.appendChild(rootMarkerEl);
   }
 
   rootMarkerEl.style.left = xPercent + "%";
@@ -668,10 +1097,9 @@ async function captureScanPhoto() {
       img.src = imgUrl;
       img.onload = () => URL.revokeObjectURL(imgUrl);
 
-      photoPreview.innerHTML = "";
+      mountPhotoToStage(img);
       rootMarkerEl = null;
       if (rootHeaveInput) rootHeaveInput.value = "";
-      photoPreview.appendChild(img);
 
       // 建一個檔案塞回 <input type="file">，讓表單送出時還是有檔案
       const file = new File([blob], "scan-photo.jpg", { type: "image/jpeg" });
@@ -800,19 +1228,13 @@ if (reportForm) {
     formData.append("rootHeavePoint", rootHeavePoint);
 
     try {
-      const res = await fetch("/api/report", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        throw new Error("回報送出失敗");
-      }
-
+      // ✅ Prototype：先不處理送出的資料，只做「看起來真的送出」
       if (formMessage) {
-        formMessage.textContent = "已收到回報，感謝你的通知！";
+        formMessage.textContent = "送出成功！正在返回首頁…";
         formMessage.classList.add("success");
       }
+
+      showSubmitModalAndGoHome();
 
       reportForm.reset();
       if (photoPreview) {
@@ -836,9 +1258,6 @@ if (reportForm) {
       }
       isFakeScanning = false;
 
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 1500);
     } catch (err) {
       console.error(err);
       if (formMessage) {
