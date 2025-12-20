@@ -1230,6 +1230,9 @@ textarea {
 #openScanMode {
   display: none;
 }
+.helper-text {
+  display: none;
+}
 
 @media (max-width: 768px) {
   #openScanMode {

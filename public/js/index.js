@@ -452,3 +452,82 @@ async function initThree() {
 }
 
 document.addEventListener("DOMContentLoaded", initThree);
+
+// =========================
+// Mobile header (same behavior as report page)
+// =========================
+function initMobileHeader() {
+  const body = document.body;
+  const searchToggle = document.querySelector(".us-mobile-search-toggle");
+  const menuToggle = document.querySelector(".us-mobile-menu-toggle");
+  const navOverlay = document.querySelector(".us-mobile-nav-overlay");
+  const navClose = document.querySelector(".us-mobile-nav-close");
+  const navPanel = document.querySelector(".us-mobile-nav-panel");
+  const searchInput = document.querySelector(".us-mobile-search-input");
+  const searchSubmit = document.querySelector(".us-mobile-search-submit");
+
+  // 如果頁面沒有 mobile header（例如桌機版），直接跳過
+  if (!searchToggle && !menuToggle) return;
+
+  function toggleSearch() {
+    body.classList.toggle("us-mobile-search-open");
+    if (body.classList.contains("us-mobile-search-open") && searchInput) {
+      // 等一拍再 focus，避免 iOS/Safari 有時候 focus 失敗
+      setTimeout(() => searchInput.focus(), 0);
+    }
+  }
+
+  if (searchToggle) {
+    searchToggle.addEventListener("click", toggleSearch);
+  }
+
+  if (searchSubmit) {
+    searchSubmit.addEventListener("click", (event) => {
+      event.preventDefault();
+      // prototype：先不做搜尋行為，先收起（跟 report 一樣的 UX）
+      toggleSearch();
+    });
+  }
+
+  function closeMenu() {
+    body.classList.remove("us-mobile-menu-open");
+    if (navOverlay) navOverlay.setAttribute("aria-hidden", "true");
+  }
+
+  function openMenu() {
+    body.classList.add("us-mobile-menu-open");
+    if (navOverlay) navOverlay.setAttribute("aria-hidden", "false");
+  }
+
+  if (menuToggle && navOverlay) {
+    menuToggle.addEventListener("click", openMenu);
+
+    // 點 overlay 空白處關閉
+    navOverlay.addEventListener("click", (event) => {
+      if (event.target === navOverlay) closeMenu();
+    });
+  }
+
+  if (navClose) {
+    navClose.addEventListener("click", closeMenu);
+  }
+
+  if (navPanel) {
+    navPanel.querySelectorAll("a").forEach((link) => {
+      link.addEventListener("click", closeMenu);
+    });
+  }
+
+  // ESC 關閉（桌機測試也方便）
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      body.classList.remove("us-mobile-search-open");
+      closeMenu();
+    }
+  });
+}
+
+// 讓首頁行為和 report 頁一致：DOM ready 後初始化 mobile header
+document.addEventListener("DOMContentLoaded", () => {
+  initMobileHeader();
+});
